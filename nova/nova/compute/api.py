@@ -1403,6 +1403,25 @@ class API(base.Base):
                         "is specified.")
                 raise exception.InvalidFixedIpAndMaxCountRequest(reason=msg)
 
+
+    def create_app(self, context, app, 
+            network_bandwidth, 
+            memory_mb, 
+            disk_gb):
+        filter_properties = dict();
+        filter_properties['network_bandwidth'] = network_bandwidth;
+        filter_properties['memory_mb'] = memory_mb;
+        filter_properties['disk_gb'] = disk_gb;
+        if network_bandwidth == None:
+            LOG.info(_("None bandwidth"));
+        if memory_mb == None:
+            LOG.info(_("None memory"));
+        if disk_gb == None:
+            LOG.info(_("None disk"));
+        self.compute_task_api.build_app(context, app=app,
+                filter_properties=filter_properties);
+
+
     @hooks.add_hook("create_instance")
     def create(self, context, instance_type,
                image_href, kernel_id=None, ramdisk_id=None,

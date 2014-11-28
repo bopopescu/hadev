@@ -31,6 +31,9 @@ def upgrade(migrate_engine):
     total_bandwidth = Column('total_bandwidth', Integer, nullable=True)
     bandwidth_used = Column('bandwidth_used', Integer, nullable=True)
     network_bandwidth = Column('network_bandwidth', Integer, nullable=True)
+    disk_gb_used = Column('disk_gb_used', Integer, nullable=True)
+    ram_mb_used = Column('ram_mb_used', Integer, nullable=True)
+    used_bandwidth = Column('used_bandwidth', Integer, nullable=True)
 
     compute_nodes.create_column(numa_topology)
     compute_nodes.create_column(total_bandwidth)
@@ -39,6 +42,9 @@ def upgrade(migrate_engine):
     shadow_compute_nodes.create_column(shadow_numa_topology)
 
     instances.create_column(network_bandwidth)
+    instances.create_column(disk_gb_used)
+    instances.create_column(ram_mb_used)
+    instances.create_column(used_bandwidth)
 
 def downgrade(migrate_engine):
     meta = MetaData()
@@ -55,3 +61,6 @@ def downgrade(migrate_engine):
     shadow_compute_nodes.drop_column('numa_topology')
 
     instances.drop_column('network_bandwidth');
+    instances.drop_column('disk_gb_used');
+    instances.drop_column('ram_mb_used');
+    instances.drop_column('used_bandwidth');

@@ -32,6 +32,7 @@ from nova.api.openstack.compute import plugins
 from nova.api.openstack.compute import server_metadata
 from nova.api.openstack.compute import servers
 from nova.api.openstack.compute import versions
+from nova.api.openstack.compute import apps
 
 allow_instance_snapshots_opt = cfg.BoolOpt('allow_instance_snapshots',
         default=True,
@@ -88,6 +89,14 @@ class APIRouter(nova.api.openstack.APIRouter):
             self.resources['limits'] = limits.create_resource()
             mapper.resource("limit", "limits",
                             controller=self.resources['limits'])
+
+        if init_only is None or 'apps' in init_only:
+            self.resources['apps'] = apps.create_resource()
+            mapper.resource("app", "apps",
+                            controller=self.resources['apps'],
+                            collection={'detail': 'GET'},
+                            member={'action': 'POST'})
+
 
         if init_only is None or 'flavors' in init_only:
             self.resources['flavors'] = flavors.create_resource()

@@ -787,6 +787,7 @@ class Controller(wsgi.Controller):
             msg = _("Instance could not be found")
             raise exc.HTTPNotFound(explanation=msg)
 
+
     @wsgi.response(202)
     @wsgi.serializers(xml=FullServerTemplate)
     @wsgi.deserializers(xml=CreateDeserializer)

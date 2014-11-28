@@ -21,6 +21,10 @@ from oslo import messaging
 from nova.objects import base as objects_base
 from nova.openstack.common import jsonutils
 from nova import rpc
+from nova.openstack.common import log as logging
+
+
+LOG = logging.getLogger(__name__)
 
 CONF = cfg.CONF
 
@@ -417,6 +421,33 @@ class ComputeTaskAPI(object):
 
         cctxt = self.client.prepare(version=version)
         cctxt.cast(context, 'build_instances', **kw)
+
+
+    def build_app(self, context, app, filter_properties,
+            image=None):
+        #image_p = jsonutils.to_primitive(image)
+        kw = {'app': app,
+              'filter_properties': filter_properties,
+              'image': None}
+
+        if filter_properties == None:
+            LOG.info(_("None filter"));
+        if filter_properties.get('network_bandwidth') == None:
+            LOG.info(_("None bandwidth"));
+
+        version = '1.9'
+        if not self.client.can_send_version('1.9'):
+            version = '1.8'
+            LOG.info(_("version 1.8"));
+        if not self.client.can_send_version('1.7'):
+            version = '1.5'
+            LOG.info(_("version 1.5"));
+
+        cctxt = self.client.prepare(version=version)
+        cctxt.cast(context, 'build_app', app=app,
+                filter_properties=filter_properties,
+                image=None)
+
 
     def unshelve_instance(self, context, instance):
         cctxt = self.client.prepare(version='1.3')

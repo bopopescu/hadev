@@ -306,6 +306,12 @@ class Instance(BASE, NovaBase):
     cleaned = Column(Integer, default=0)
 
     network_bandwidth = Column(Integer)
+    
+    disk_gb_used = Column(Integer)
+    
+    ram_mb_used = Column(Integer)
+    
+    used_bandwidth = Column(Integer)
 
 
 class InstanceInfoCache(BASE, NovaBase):

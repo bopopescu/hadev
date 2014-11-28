@@ -363,6 +363,14 @@ class ComputeTaskAPI(object):
                 block_device_mapping=block_device_mapping,
                 legacy_bdm=legacy_bdm)
 
+    def build_app(self, context, app, filter_properties,
+            image=None):
+        self.conductor_compute_rpcapi.build_app(context,
+                app=app,
+                filter_properties=filter_properties,
+                image=image)
+
+
     def unshelve_instance(self, context, instance):
         self.conductor_compute_rpcapi.unshelve_instance(context,
                 instance=instance)

@@ -644,6 +644,29 @@ class ComputeTaskManager(base.Base):
                     block_device_mapping=bdms, node=host['nodename'],
                     limits=host['limits'])
 
+
+    def build_app(self, context, app, filter_properties,
+            image=None) :
+        # TODO
+        #filter_properties = dict();
+        #filter_properties['network_bandwidth'] = app['network_bandwidth'];
+        #filter_properties['memory_mb'] = app['memory_mb'];
+        #filter_properties['disk_gb'] = app['disk_gb'];
+        
+        if app == None:
+            LOG.info(_("None app"));
+        if app.get('network_bandwidth') == None:
+            LOG.info(_("None app bandwidth"));
+        if filter_properties == None:
+            LOG.info(_("None filter"));
+        if filter_properties.get('network_bandwidth') == None:
+            LOG.info(_("None bandwidth"));
+        instance = self.scheduler_client.select_instance_destinations(context,
+                filter_properties=filter_properties);
+        #LOG.warning(_("Found instance to launch app"),
+        #            instance=instance)
+
+
     def _delete_image(self, context, image_id):
         return self.image_api.delete(context, image_id)
 
