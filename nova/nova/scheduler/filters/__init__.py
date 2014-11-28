@@ -45,3 +45,30 @@ def all_filters():
     and should return a list of all filter classes available.
     """
     return HostFilterHandler().get_all_classes()
+
+
+class BaseInstanceFilter(filters.BaseFilter):
+    """Base class for host filters."""
+    def _filter_one(self, obj, filter_properties):
+        """Return True if the object passes the filter, otherwise False."""
+        return self.instance_passes(obj, filter_properties)
+
+    def instance_passes(self, instance, filter_properties):
+        """Return True if the HostState passes the filter, otherwise False.
+        Override this in a subclass.
+        """
+        raise NotImplementedError()
+
+
+class InstanceFilterHandler(filters.BaseFilterHandler):
+    def __init__(self):
+        super(InstanceFilterHandler, self).__init__(BaseInstanceFilter)
+
+
+def all_instance_filters():
+    """Return a list of filter classes found in this directory.
+
+    This method is used as the default for available scheduler filters
+    and should return a list of all filter classes available.
+    """
+    return InstanceFilterHandler().get_all_classes()

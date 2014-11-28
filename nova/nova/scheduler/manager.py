@@ -174,3 +174,15 @@ class SchedulerManager(manager.Manager):
         dests = self.driver.select_destinations(context, request_spec,
             filter_properties)
         return jsonutils.to_primitive(dests)
+
+
+    @messaging.expected_exceptions(exception.NoValidHost)
+    def select_instance_destinations(self, context, filter_properties):
+        """Returns destinations(s) best suited for this request_spec and
+        filter_properties.
+
+        The result should be a list of dicts with 'host', 'nodename' and
+        'limits' as keys.
+        """
+        dests = self.driver.select_instance_destinations(context, filter_properties)
+        return jsonutils.to_primitive(dests)

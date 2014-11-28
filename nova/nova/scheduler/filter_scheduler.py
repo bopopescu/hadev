@@ -157,6 +157,18 @@ class FilterScheduler(driver.Scheduler):
                            dict(request_spec=request_spec))
         return dests
 
+
+    def select_instance_destinations(self, context, filter_properties):
+        # ToDo to fill the logic
+        """Selects a filtered instance."""
+
+        selected_instances = self._schedule_instance(context, filter_properties)
+
+        # Couldn't fulfill the request_spec
+
+        return dict(instance=selected_instances.instance);
+
+
     def _provision_resource(self, context, weighed_host, request_spec,
             filter_properties, requested_networks, injected_files,
             admin_password, is_first_time, instance_uuid=None,
@@ -316,6 +328,24 @@ class FilterScheduler(driver.Scheduler):
                 filter_properties['group_hosts'].add(chosen_host.obj.host)
         return selected_hosts
 
+
+    def _schedule_instance(self, context, filter_properties):
+        """Returns a list of instances that meet the required specs"""
+
+        instances = self._get_all_instances(context)
+        instances = self.instance_manager.get_filtered_instances(instances,
+                        filter_properties)
+        chosen_instance = None;
+        if len(instances) != 0:
+            chosen_instance = random.choice(instances);
+        #chosen_instance.consume_from_app(filter_properties)
+        return chosen_instance;
+
     def _get_all_host_states(self, context):
         """Template method, so a subclass can implement caching."""
         return self.host_manager.get_all_host_states(context)
+
+
+    def _get_all_instances(self, context):
+        """Template method, so a subclass can implement caching."""
+        return self.instance_manager.get_all_instances(context)

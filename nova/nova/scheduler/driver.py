@@ -41,6 +41,9 @@ scheduler_driver_opts = [
     cfg.StrOpt('scheduler_host_manager',
                default='nova.scheduler.host_manager.HostManager',
                help='The scheduler host manager class to use'),
+    cfg.StrOpt('scheduler_instance_manager',
+               default='nova.scheduler.instance_manager.InstanceManager',
+               help='The scheduler instance manager class to use'),
     ]
 
 CONF = cfg.CONF
@@ -101,6 +104,8 @@ class Scheduler(object):
     def __init__(self):
         self.host_manager = importutils.import_object(
                 CONF.scheduler_host_manager)
+        self.instance_manager = importutils.import_object(
+                CONF.scheduler_instance_manager)
         self.servicegroup_api = servicegroup.API()
 
     def run_periodic_tasks(self, context):
@@ -129,6 +134,16 @@ class Scheduler(object):
         """Must override select_destinations method.
 
         :return: A list of dicts with 'host', 'nodename' and 'limits' as keys
+            that satisfies the request_spec and filter_properties.
+        """
+        msg = _("Driver must implement select_destinations")
+        raise NotImplementedError(msg)
+
+
+    def select_instance_destinations(self, context, filter_properties):
+        """Must override select_instance_destinations method.
+
+        :return: A list of dicts with 'instances' as keys
             that satisfies the request_spec and filter_properties.
         """
         msg = _("Driver must implement select_destinations")

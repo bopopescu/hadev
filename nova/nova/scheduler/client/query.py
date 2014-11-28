@@ -32,3 +32,14 @@ class SchedulerQueryClient(object):
         """
         return self.scheduler_rpcapi.select_destinations(
             context, request_spec, filter_properties)
+
+
+    def select_instance_destinations(self, context, filter_properties):
+        """Returns destinations(s) best suited for this request_spec and
+        filter_properties.
+
+        The result should be a list of dicts with 'host', 'nodename' and
+        'limits' as keys.
+        """
+        return self.scheduler_rpcapi.select_instance_destinations(
+            context, filter_properties)
