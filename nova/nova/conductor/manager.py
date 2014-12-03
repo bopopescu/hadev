@@ -59,7 +59,8 @@ allowed_updates = ['task_state', 'vm_state', 'expected_task_state',
                    'instance_type_id', 'root_device_name', 'launched_on',
                    'progress', 'vm_mode', 'default_ephemeral_device',
                    'default_swap_device', 'root_device_name',
-                   'system_metadata', 'updated_at'
+                   'system_metadata', 'updated_at', 'disk_gb_used',
+                   'ram_mb_used', 'used_bandwidth'
                    ]
 
 # Fields that we want to convert back into a datetime object.
@@ -665,6 +666,19 @@ class ComputeTaskManager(base.Base):
                 filter_properties=filter_properties);
         #LOG.warning(_("Found instance to launch app"),
         #            instance=instance)
+
+        values = {}
+        values['app_uuid'] = app['uuid'];
+        values['network_bandwidth'] = app['network_bandwidth'];
+        values['memory_mb'] = app['memory_mb'];
+        values['disk_gb'] = app['disk_gb'];
+        values['display_name'] = app['display_name'];
+        values['instance_uuid'] = instance['uuid'];
+        values['instance_id'] = instance['id'];
+        values['hostname'] = instance['hostname'];
+
+        app_ref = self.db.app_create(context, values);
+
 
 
     def _delete_image(self, context, image_id):

@@ -622,6 +622,12 @@ def instance_create(context, values):
     return IMPL.instance_create(context, values)
 
 
+
+def app_create(context, values):
+    """Create an app from the values dictionary."""
+    return IMPL.app_create(context, values)
+
+
 def instance_destroy(context, instance_uuid, constraint=None,
         update_cells=True):
     """Destroy the instance or raise if it does not exist."""

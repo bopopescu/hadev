@@ -1589,6 +1589,24 @@ def _handle_objects_related_type_conversions(values):
     convert_objects_related_datetimes(values, *datetime_keys)
 
 
+
+
+@require_context
+def app_create(context, values):
+    """Create a new app record in the database.
+
+    :param values: = dict containing column values
+    """
+    try:
+        app_ref = models.App()
+        app_ref.update(values)
+        app_ref.save()
+    except db_exc.DBError:
+        raise exception.AppCreateException()
+
+    return app_ref
+
+
 @require_context
 def instance_create(context, values):
     """Create a new Instance record in the database.

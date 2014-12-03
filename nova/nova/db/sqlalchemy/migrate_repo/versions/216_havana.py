@@ -620,6 +620,26 @@ def upgrade(migrate_engine):
         mysql_charset='utf8'
     )
 
+
+    apps = Table('apps', meta,
+        Column('created_at', DateTime),
+        Column('updated_at', DateTime),
+        Column('deleted_at', DateTime),
+        Column('deleted', Integer),
+        Column('app_id', Integer, primary_key=True, nullable=False),
+        Column('app_uuid', String(length=36)),
+        Column('instance_id', Integer),
+        Column('instance_uuid', String(length=36)),
+        Column('hostname', String(length=255)),
+        Column('display_name', String(length=255)),
+        Column('memory_mb', Integer),
+        Column('disk_gb', Integer),
+        Column('network_bandwidth', Integer),
+        mysql_engine='InnoDB',
+        mysql_charset='utf8'
+    )
+
+
     instance_actions = Table('instance_actions', meta,
         Column('created_at', DateTime),
         Column('updated_at', DateTime),
@@ -1073,6 +1093,12 @@ def upgrade(migrate_engine):
     instances.create()
     Index('project_id', instances.c.project_id).create()
     Index('uuid', instances.c.uuid, unique=True).create()
+
+
+    apps.create()
+    Index('instance_id', apps.c.instance_id).create()
+    Index('instance_uuid', apps.c.instance_uuid).create()
+    Index('app_uuid', apps.c.app_uuid, unique=True).create()
 
     # create all tables
     tables = [aggregates, console_pools, instance_types,

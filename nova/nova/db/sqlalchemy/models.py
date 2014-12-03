@@ -314,6 +314,37 @@ class Instance(BASE, NovaBase):
     used_bandwidth = Column(Integer)
 
 
+
+class App(BASE, NovaBase):
+    """Represents a guest VM."""
+    __tablename__ = 'apps'
+    __table_args__ = (
+        Index('app_uuid', 'app_uuid', unique=True),
+        Index('instance_id', 'instance_id'),
+        Index('instance_uuid', 'instance_uuid'),
+    )
+
+    app_id = Column(Integer, primary_key=True, autoincrement=True)
+
+
+    app_uuid = Column(String(36))
+
+    hostname = Column(String(255))
+
+    display_name = Column(String(255))
+
+    instance_id = Column(Integer)
+
+    instance_uuid = Column(String(36))
+
+    memory_mb = Column(Integer)
+
+    disk_gb = Column(Integer)
+    
+    network_bandwidth = Column(Integer)
+
+
+
 class InstanceInfoCache(BASE, NovaBase):
     """Represents a cache of information about an instance
     """
