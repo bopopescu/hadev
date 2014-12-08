@@ -166,7 +166,19 @@ class FilterScheduler(driver.Scheduler):
 
         # Couldn't fulfill the request_spec
 
-        return dict(instance=selected_instances.instance);
+        return selected_instances.instance;
+
+
+    def select_failover_instance(self, context, filter_properties):
+        # ToDo to fill the logic
+        """Selects a filtered instance."""
+
+        selected_instances = self._schedule_instance(context, filter_properties)
+
+        # Couldn't fulfill the request_spec
+
+        return selected_instances.instance;
+
 
 
     def _provision_resource(self, context, weighed_host, request_spec,
@@ -331,14 +343,18 @@ class FilterScheduler(driver.Scheduler):
 
     def _schedule_instance(self, context, filter_properties):
         """Returns a list of instances that meet the required specs"""
+        instance_uuid = None;
+        if filter_properties.get('instance_uuid') != None:
+            LOG.info(_("Not none instance uuid"));
+            instance_uuid = filter_properties['instance_uuid'];
 
-        instances = self._get_all_instances(context)
+        instances = self._get_all_instances(context, instance_uuid)
         instances = self.instance_manager.get_filtered_instances(instances,
                         filter_properties)
         chosen_instance = None;
         if len(instances) != 0:
             chosen_instance = random.choice(instances);
-        #chosen_instance.consume_from_app(filter_properties)
+        chosen_instance.consume_from_app(context, filter_properties)
         return chosen_instance;
 
     def _get_all_host_states(self, context):
@@ -346,6 +362,6 @@ class FilterScheduler(driver.Scheduler):
         return self.host_manager.get_all_host_states(context)
 
 
-    def _get_all_instances(self, context):
+    def _get_all_instances(self, context, instance_uuid):
         """Template method, so a subclass can implement caching."""
-        return self.instance_manager.get_all_instances(context)
+        return self.instance_manager.get_all_instances(context, instance_uuid)

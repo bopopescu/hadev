@@ -370,6 +370,14 @@ class ComputeTaskAPI(object):
                 filter_properties=filter_properties,
                 image=image)
 
+    def failover_app(self, context, app, filter_properties,
+            image=None):
+        self.conductor_compute_rpcapi.failover_app(context,
+                app=app,
+                filter_properties=filter_properties,
+                image=image)
+
+
 
     def unshelve_instance(self, context, instance):
         self.conductor_compute_rpcapi.unshelve_instance(context,

@@ -50,6 +50,11 @@ class InstanceFilter(filters.BaseInstanceFilter):
             if instance.free_disk_mb < requested_disk:
                 return False;
 
+
+        if filter_properties.get('instance_uuid') != None:
+            if instance.instance['uuid'] == filter_properties['instance_uuid']:
+                return False;
+
         return True
 
 

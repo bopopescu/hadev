@@ -648,11 +648,6 @@ class ComputeTaskManager(base.Base):
 
     def build_app(self, context, app, filter_properties,
             image=None) :
-        # TODO
-        #filter_properties = dict();
-        #filter_properties['network_bandwidth'] = app['network_bandwidth'];
-        #filter_properties['memory_mb'] = app['memory_mb'];
-        #filter_properties['disk_gb'] = app['disk_gb'];
         
         if app == None:
             LOG.info(_("None app"));
@@ -664,8 +659,6 @@ class ComputeTaskManager(base.Base):
             LOG.info(_("None bandwidth"));
         instance = self.scheduler_client.select_instance_destinations(context,
                 filter_properties=filter_properties);
-        #LOG.warning(_("Found instance to launch app"),
-        #            instance=instance)
 
         values = {}
         values['app_uuid'] = app['uuid'];
@@ -679,6 +672,34 @@ class ComputeTaskManager(base.Base):
 
         app_ref = self.db.app_create(context, values);
 
+
+    def failover_app(self, context, app, filter_properties,
+            image=None) :
+        
+        if app == None:
+            LOG.info(_("None app"));
+        if app.get('network_bandwidth') == None:
+            LOG.info(_("None app bandwidth"));
+        if filter_properties == None:
+            LOG.info(_("None filter"));
+        if filter_properties.get('network_bandwidth') == None:
+            LOG.info(_("None bandwidth"));
+        instance = self.scheduler_client.select_failover_instance(context,
+                filter_properties=filter_properties);
+
+        values = {}
+        values['instance_uuid'] = instance['uuid'];
+        values['instance_id'] = instance['id'];
+        values['hostname'] = instance['hostname'];
+        values['app_id'] = app['app_id'];
+        values['app_uuid'] = app['app_uuid'];
+        if instance.get('uuid') != None:
+            LOG.info(_(" not none instance"));
+            if instance['uuid'] == filter_properties['instance_uuid']:
+                LOG.info(_(" same instance selected"));
+
+        app_uuid = app['app_uuid'];
+        app_ref = self.db.app_update(context, app_uuid, values);
 
 
     def _delete_image(self, context, image_id):

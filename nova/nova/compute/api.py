@@ -41,6 +41,7 @@ from nova.compute import vm_states
 from nova.consoleauth import rpcapi as consoleauth_rpcapi
 from nova import crypto
 from nova.db import base
+from nova import db
 from nova import exception
 from nova import hooks
 from nova.i18n import _
@@ -1420,6 +1421,23 @@ class API(base.Base):
             LOG.info(_("None disk"));
         self.compute_task_api.build_app(context, app=app,
                 filter_properties=filter_properties);
+
+
+    def failover_app(self, context, app):
+
+        app_uuid = app['uuid'];
+        appDict = db.get_app_by_uuid(context,app_uuid);
+        filter_properties = {};
+        filter_properties['network_bandwidth'] = appDict['network_bandwidth'];
+        filter_properties['memory_mb'] = appDict['memory_mb'];
+        filter_properties['disk_gb'] = appDict['disk_gb'];
+        filter_properties['instance_uuid'] = appDict['instance_uuid'];
+        filter_properties['instance_id'] = appDict['instance_id'];
+        app['app_id'] = appDict['app_id'];
+
+        self.compute_task_api.failover_app(context, app=appDict,
+                filter_properties=filter_properties);
+
 
 
     @hooks.add_hook("create_instance")

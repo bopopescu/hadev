@@ -60,6 +60,7 @@ class ViewBuilder(common.ViewBuilder):
         return {
             "app": {
                 "id": app["uuid"],
+                "name": app["display_name"],
                 "links": self._get_links(request,
                                          app["uuid"],
                                          self._collection_name),

@@ -34,7 +34,7 @@ from nova.pci import pci_stats
 from nova.scheduler import filters
 from nova.scheduler import weights
 from nova.virt import hardware
-
+from nova import notifications
 
 
 instance_manager_opts = [
@@ -93,7 +93,7 @@ class InstanceState(object):
 
 
 
-    def consume_from_app(self, app):
+    def consume_from_app(self, context, app):
         bandwidth = app['network_bandwidth']
 
         self.free_ram_mb -= app['memory_mb']
@@ -104,8 +104,18 @@ class InstanceState(object):
         self.num_apps += 1;
 
 
+        update_dict = {};
+        update_dict['disk_gb_used'] = float(self.free_disk_mb)/1024.0;
+        update_dict['ram_mb_used'] = self.free_ram_mb;
+        update_dict['used_bandwidth'] = self.used_bandwidth;
 
+        instance_uuid = self.instance['uuid'];
+        
+        (old_ref, new_ref) = db.instance_update_and_get_original(context,
+                instance_uuid, update_dict);
 
+        notifications.send_update(context, old_ref, new_ref,
+                                  service="scheduler")
 
 
 
@@ -154,7 +164,7 @@ class InstanceManager(object):
         return self.filter_handler.get_filtered_objects(filter_classes,
                 instances, filter_properties, index)
 
-    def get_all_instances(self, context):
+    def get_all_instances(self, context, instance_uuid=None):
         """Returns a list of HostStates that represents all the hosts
         the HostManager knows about. Also, each of the consumable resources
         in HostState are pre-populated and adjusted based on data in the db.
@@ -163,7 +173,18 @@ class InstanceManager(object):
         # Get resource usage across the available compute nodes:
         instances = db.instance_get_all(context)
         instance_states = [];
+        if instance_uuid == None:
+            LOG.info(_("None instance_uuid"));
+
         for instance in instances:
+            vm_state = instance.get('vm_state')
+
+            if vm_state == None or vm_state != vm_states.ACTIVE:
+                continue;
+            if instance_uuid != None and instance['uuid'] == instance_uuid:
+                LOG.info(_("found matching uuid instance"));
+                continue;
+
             instance_state = self.instance_state_cls(instance);
             instance_states.append(instance_state);
 

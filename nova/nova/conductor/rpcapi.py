@@ -425,10 +425,6 @@ class ComputeTaskAPI(object):
 
     def build_app(self, context, app, filter_properties,
             image=None):
-        #image_p = jsonutils.to_primitive(image)
-        kw = {'app': app,
-              'filter_properties': filter_properties,
-              'image': None}
 
         if filter_properties == None:
             LOG.info(_("None filter"));
@@ -448,6 +444,26 @@ class ComputeTaskAPI(object):
                 filter_properties=filter_properties,
                 image=None)
 
+    def failover_app(self, context, app, filter_properties,
+            image=None):
+
+        if filter_properties == None:
+            LOG.info(_("None filter"));
+        if filter_properties.get('network_bandwidth') == None:
+            LOG.info(_("None bandwidth"));
+
+        version = '1.9'
+        if not self.client.can_send_version('1.9'):
+            version = '1.8'
+            LOG.info(_("version 1.8"));
+        if not self.client.can_send_version('1.7'):
+            version = '1.5'
+            LOG.info(_("version 1.5"));
+
+        cctxt = self.client.prepare(version=version)
+        cctxt.cast(context, 'failover_app', app=app,
+                filter_properties=filter_properties,
+                image=None)
 
     def unshelve_instance(self, context, instance):
         cctxt = self.client.prepare(version='1.3')

@@ -628,6 +628,16 @@ def app_create(context, values):
     return IMPL.app_create(context, values)
 
 
+def app_update(context, app_uuid, values):
+    """Update app with app_uuid using the values dictionary."""
+    return IMPL.app_update(context, app_uuid, values)
+
+def get_app_by_uuid(context, app_uuid):
+    """Get app details using app_uuid."""
+    return IMPL.get_app_by_uuid(context, app_uuid)
+
+
+
 def instance_destroy(context, instance_uuid, constraint=None,
         update_cells=True):
     """Destroy the instance or raise if it does not exist."""

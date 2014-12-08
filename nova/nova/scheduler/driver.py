@@ -148,3 +148,13 @@ class Scheduler(object):
         """
         msg = _("Driver must implement select_destinations")
         raise NotImplementedError(msg)
+
+
+    def select_failover_instance(self, context, filter_properties):
+        """Must override select_failover_instance method.
+
+        :return: A list of dicts with 'instance' as keys
+            that satisfies the request_spec and filter_properties.
+        """
+        msg = _("Driver must implement select_destinations")
+        raise NotImplementedError(msg)

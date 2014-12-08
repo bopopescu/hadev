@@ -646,6 +646,22 @@ def compute_node_update(context, compute_id, values):
     return compute_ref
 
 
+
+@require_admin_context
+@_retry_on_deadlock
+def app_update(context, app_uuid, values):
+    """Updates the App record with the most recent data."""
+
+    app_ref = get_app_by_uuid(context, app_uuid);
+    # scheduler cache of compute node data in case of races.
+    #values['updated_at'] = timeutils.utcnow()
+    #values['updated_at'] = timeutils.parse_strtime(values['updated_at'])
+    #values['updated_at'] = values['updated_at'].replace(tzinfo=None)
+    app_ref.update(values)
+    app_ref.save();
+    return app_ref
+
+
 @require_admin_context
 def compute_node_delete(context, compute_id):
     """Delete a ComputeNode record."""
@@ -1605,6 +1621,18 @@ def app_create(context, values):
         raise exception.AppCreateException()
 
     return app_ref
+
+
+def get_app_by_uuid(context, app_uuid):
+    result = model_query(context, models.App).\
+            filter_by(app_uuid=app_uuid).\
+            first()
+
+    if not result:
+        raise exception.ComputeHostNotFound(host=app_uuid)
+
+    return result
+
 
 
 @require_context

@@ -53,5 +53,9 @@ class SchedulerClient(object):
         return self.queryclient.select_instance_destinations(
             context, filter_properties)
 
+    def select_failover_instance(self, context, filter_properties):
+        return self.queryclient.select_failover_instance(
+            context, filter_properties)
+
     def update_resource_stats(self, context, name, stats):
         self.reportclient.update_resource_stats(context, name, stats)

@@ -201,14 +201,15 @@ class CreateDeserializer(CommonDeserializer):
         return {'body': {'app': app}}
 
 
-class Controller(wsgi.Controller):
+
+class AppsController(wsgi.Controller):
     """The Server API base controller class for the OpenStack API."""
 
     _view_builder_class = views_apps.ViewBuilder
 
 
     def __init__(self, ext_mgr=None, **kwargs):
-        super(Controller, self).__init__(**kwargs)
+        super(AppsController, self).__init__(**kwargs)
         self.compute_api = compute.API()
         self.ext_mgr = ext_mgr
 
@@ -228,9 +229,6 @@ class Controller(wsgi.Controller):
     @wsgi.serializers(xml=AppTemplate)
     @wsgi.deserializers(xml=CreateDeserializer)
     def create(self, req, body):
-        #ToDo
-        #if not self.is_valid_body(body, 'app'):
-        #    raise exc.HTTPUnprocessableEntity()
 
         context = req.environ['nova.context']
         server_dict = body['app']
@@ -239,33 +237,53 @@ class Controller(wsgi.Controller):
         self._validate_server_name(name)
         name = name.strip()
 
-        network_bandwidth = server_dict.get('network_bandwidth');
-        memory_mb = server_dict.get('memory_mb');
-        disk_gb = server_dict.get('disk_gb');
-        if network_bandwidth == None:
-            LOG.info(_("None bandwidth"));
-        if memory_mb == None:
-            LOG.info(_("None memory"));
-        if disk_gb == None:
-            LOG.info(_("None disk"));
-        app = dict();
-        app['network_bandwidth'] = network_bandwidth;
-        app['memory_mb'] = memory_mb;
-        app['disk_gb'] = disk_gb;
-        app['uuid'] = 1;
-        app['display_name'] = name;
+        if server_dict.get('uuid') != None:
+            uuid = server_dict['uuid']
+            app = dict();
+            app['uuid'] = uuid;
+            app['display_name'] = name;
 
-        self.compute_api.create_app (context, app=app,
+            self.compute_api.failover_app (context, app=app)
+
+            appR = self._view_builder.create(req, app);
+
+            robj = wsgi.ResponseObject(appR);
+
+            return robj;
+        else:
+            uuid = '';
+            network_bandwidth = server_dict.get('network_bandwidth');
+            memory_mb = server_dict.get('memory_mb');
+            disk_gb = server_dict.get('disk_gb');
+            if network_bandwidth == None:
+                LOG.info(_("None bandwidth"));
+            if memory_mb == None:
+                LOG.info(_("None memory"));
+            if disk_gb == None:
+                LOG.info(_("None disk"));
+            app = dict();
+            app['network_bandwidth'] = network_bandwidth;
+            app['memory_mb'] = memory_mb;
+            app['disk_gb'] = disk_gb;
+            app['uuid'] = uuidutils.generate_uuid();
+            app['display_name'] = name;
+
+            self.compute_api.create_app (context, app=app,
                 network_bandwidth=network_bandwidth,
                 memory_mb=memory_mb,
                 disk_gb=disk_gb);
 
-        appR = self._view_builder.create(req, app);
+            appR = self._view_builder.create(req, app);
 
-        robj = wsgi.ResponseObject(appR);
+            robj = wsgi.ResponseObject(appR);
 
-        return robj;
+            return robj;
+
+
+
+
+
 
 
 def create_resource():
-    return wsgi.Resource(Controller())
+    return wsgi.Resource(AppsController())

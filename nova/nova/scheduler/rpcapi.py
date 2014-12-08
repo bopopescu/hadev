@@ -111,3 +111,9 @@ class SchedulerAPI(object):
         cctxt = self.client.prepare()
         return cctxt.call(ctxt, 'select_instance_destinations',
             filter_properties=filter_properties)
+
+
+    def select_failover_instance(self, ctxt, filter_properties):
+        cctxt = self.client.prepare()
+        return cctxt.call(ctxt, 'select_failover_instance',
+            filter_properties=filter_properties)
