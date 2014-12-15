@@ -686,6 +686,22 @@ class ComputeAPI(object):
                    instance=instance,
                    destroy_disks=destroy_disks, migrate_data=migrate_data)
 
+
+    def create_queue_for_bandwidth(self, context, host, instance, bandwidth):
+
+        if self.client.can_send_version('3.27'):
+            version = '3.27'
+        else:
+            version = '3.0'
+            instance = jsonutils.to_primitive(instance)
+
+        msg_kwargs = {'instance': instance, 'bandwidth': bandwidth};
+
+        cctxt = self.client.prepare(server=host, version=version)
+        cctxt.cast(ctxt, 'create_queue_for_bandwidth', **msg_kwargs)
+
+
+
     # NOTE(alaski): Remove this method when the scheduler rpc interface is
     # bumped to 4.x as the only callers of this method will be removed.
     def run_instance(self, ctxt, instance, host, request_spec,

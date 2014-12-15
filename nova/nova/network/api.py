@@ -315,6 +315,11 @@ class API(base_api.NetworkAPI):
     def show_port(self, *args, **kwargs):
         raise NotImplementedError()
 
+
+    def get_port_of_instance(self, context, instance):
+        raise NotImplementedError()
+
+
     @wrap_check_policy
     @base_api.refresh_cache
     def add_fixed_ip_to_instance(self, context, instance, network_id):

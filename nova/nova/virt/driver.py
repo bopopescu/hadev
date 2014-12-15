@@ -231,6 +231,13 @@ class ComputeDriver(object):
         """
         raise NotImplementedError()
 
+
+    def create_queue_for_bandwidth(self, context, port_id, bandwidth):
+        """Create queue on the port_id so that app can have the bandwidth.
+        """
+        raise NotImplementedError()
+
+
     def rebuild(self, context, instance, image_meta, injected_files,
                 admin_password, bdms, detach_block_devices,
                 attach_block_devices, network_info=None,

@@ -110,6 +110,10 @@ class NetworkAPI(base.Base):
         """Get fixed ip by id."""
         raise NotImplementedError()
 
+    def get_port_of_instance(self, context, instance):
+        """Get port of instance."""
+        raise NotImplementedError()
+
     def get_fixed_ip_by_address(self, context, address):
         """Get fixed ip by address."""
         raise NotImplementedError()

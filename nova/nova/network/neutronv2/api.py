@@ -648,6 +648,25 @@ class API(base_api.NetworkAPI):
 
         return networks, port_ids
 
+
+
+    @base_api.refresh_cache
+    def get_port_of_instance(self, context, instance):
+        """Create queue for the bandwidth required by app on instance"""
+
+        zone = 'compute:%s' % instance['availability_zone']
+        search_opts = {'device_id': instance['uuid'],
+                       'device_owner':zone}
+
+        data = neutronv2.get_client(context).list_ports(**search_opts)
+        port = data['ports'][0];
+        port_id = port['id'];
+
+        return port_id;
+
+
+
+
     @base_api.refresh_cache
     def add_fixed_ip_to_instance(self, context, instance, network_id):
         """Add a fixed ip to the instance from specified network."""

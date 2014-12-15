@@ -925,6 +925,16 @@ class LibvirtDriver(driver.ComputeDriver):
 
         return doms
 
+
+    def create_queue_for_bandwidth(self, context, port_id, bandwidth):
+        ovs_port = 'qvo%s' % port_id [:14];
+        queue_name = 'qu_%s' % port_id [:14];
+        bandwidth_in_b = bandwidth * 1024 * 1024;
+        command = 'ovs-vsctl - set port %s qos=@%s - --id=@%s create qos type=linux-htb other-config:min-rate=%s' % (ovs_port, queue_name, queue_name, bandwidth_in_b);
+
+        result = os.popen(command);
+
+
     def list_instances(self):
         names = []
         for dom in self._list_instance_domains(only_running=False):

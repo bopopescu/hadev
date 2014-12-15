@@ -2267,6 +2267,22 @@ class ComputeManager(manager.Manager):
             # exception will be raised by instance.save()
             pass
 
+
+    @wrap_exception()
+    @reverts_task_state
+    @wrap_instance_event
+    @wrap_instance_fault
+    def create_queue_for_bandwidth(self, context, instance, bandwidth):
+
+        port_id = self.network_api.get_port_of_instance(context, instance);
+
+        queue_id = self.driver.create_queue_for_bandwidth(context,
+                                                          port_id,
+                                                          bandwidth);
+
+
+
+
     @object_compat
     @messaging.expected_exceptions(exception.BuildAbortException,
                                    exception.UnexpectedTaskStateError,

@@ -1422,6 +1422,17 @@ class API(base.Base):
         self.compute_task_api.build_app(context, app=app,
                 filter_properties=filter_properties);
 
+        app_uuid = app['uuid'];
+        appDict = db.get_app_by_uuid(context,app_uuid);
+        instance_uuid = appDict['instance_uuid'];
+        instance = db.instance_get_by_uuid(context, instance_uuid);
+        hostname = instance['hostname'];
+        host = db.compute_node_search_by_hypervisor(context, hostname);
+
+        self.compute_rpcapi.create_queue_on_bandwidth(context,
+                                                    host,
+                                                    instance,
+                                                    network_bandwidth);
 
     def failover_app(self, context, app):
 
