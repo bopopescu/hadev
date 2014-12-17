@@ -15,7 +15,7 @@
 
 import functools
 
-from nova.openstack.common import importutils
+from oslo.utils import importutils
 
 
 class LazyLoader(object):
@@ -49,13 +49,13 @@ class SchedulerClient(object):
             context, request_spec, filter_properties)
 
 
-    def select_instance_destinations(self, context, filter_properties):
+    def select_instance_destinations(self, context, app, filter_properties):
         return self.queryclient.select_instance_destinations(
-            context, filter_properties)
+            context, app, filter_properties)
 
-    def select_failover_instance(self, context, filter_properties):
+    def select_failover_instance(self, context, app, filter_properties):
         return self.queryclient.select_failover_instance(
-            context, filter_properties)
+            context, app, filter_properties)
 
     def update_resource_stats(self, context, name, stats):
         self.reportclient.update_resource_stats(context, name, stats)

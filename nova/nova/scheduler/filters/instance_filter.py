@@ -23,38 +23,40 @@ from nova.scheduler.filters import utils
 LOG = logging.getLogger(__name__)
 
 
-class InstanceFilter(filters.BaseInstanceFilter):
+#class InstanceFilter(filters.BaseInstanceFilter):
+#    """Instance Filter."""
 
-    def instance_passes(self, instance, filter_properties):
-        """Filter based on cpu, memory and bandwidth."""
-        if filter_properties.get('network_bandwidth') != None:
-            requested_bandwidth = filter_properties['network_bandwidth'];
-        else:
-            requested_bandwidth = 100;
-            LOG.info(_(" None bandwidth"));
+def instance_passes(instance, filter_properties):
+    """Filter based on cpu, memory and bandwidth."""
+
+    if filter_properties.get('network_bandwidth') != None:
+        requested_bandwidth = filter_properties['network_bandwidth'];
+    else:
+        requested_bandwidth = 100;
+        LOG.info(_(" None bandwidth"));
         
 
-        available_bandwidth = instance.total_bandwidth - instance.used_bandwidth;
-        if requested_bandwidth > available_bandwidth:
-            return False
+    available_bandwidth = instance.total_bandwidth - instance.used_bandwidth;
+    if requested_bandwidth > available_bandwidth:
+        return False
 
-        if filter_properties.get('memory_mb') != None:
-            LOG.info(_(" mmeory spec"));
-            requested_memory = filter_properties['memory_mb'];
-            if instance.free_ram_mb < requested_memory:
-                return False;
+    if filter_properties.get('memory_mb') != None:
+        LOG.info(_(" mmeory spec"));
+        requested_memory = filter_properties['memory_mb'];
+        if instance.free_ram_mb < requested_memory:
+            return False;
  
-        if filter_properties.get('disk_gb') != None:
-            LOG.info(_(" disk spec"));
-            requested_disk = filter_properties['disk_gb'] * 1024;
-            if instance.free_disk_mb < requested_disk:
-                return False;
+    if filter_properties.get('disk_gb') != None:
+        LOG.info(_(" disk spec"));
+        requested_disk = filter_properties['disk_gb'] * 1024;
+        if instance.free_disk_mb < requested_disk:
+            return False;
 
 
-        if filter_properties.get('instance_uuid') != None:
-            if instance.instance['uuid'] == filter_properties['instance_uuid']:
-                return False;
+    if filter_properties.get('instance_uuid') != None:
+        if instance.instance['uuid'] == filter_properties['instance_uuid']:
+            return False;
 
-        return True
+    return True
 
 

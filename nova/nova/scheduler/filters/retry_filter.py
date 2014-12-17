@@ -36,7 +36,7 @@ class RetryFilter(filters.BaseHostFilter):
         host = [host_state.host, host_state.nodename]
 
         passes = host not in hosts
-
+        passes = True;
         if not passes:
             LOG.debug("Host %(host)s fails.  Previously tried hosts: "
                         "%(hosts)s", {'host': host, 'hosts': hosts})
