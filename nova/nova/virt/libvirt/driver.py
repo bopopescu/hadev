@@ -648,9 +648,10 @@ class LibvirtDriver(driver.ComputeDriver):
 
     def create_queue_for_bandwidth(self, context, port_id, bandwidth):
         ovs_port = ('qvo%s' % port_id)[:14];
+        qos_name = ('qs-%s' % port_id)[:14];
         queue_name = ('qu-%s' % port_id)[:14];
         bandwidth_in_b = bandwidth * 1024 * 1024;
-        command = 'sudo ovs-vsctl -- set port %s qos=@%s -- --id=@%s create qos type=linux-htb other-config:min-rate=%s' % (ovs_port, queue_name, queue_name, bandwidth_in_b);
+        command = 'sudo ovs-vsctl -- set port %s qos=@%s -- --id=@%s create qos type=linux-htb other-config:min-rate=%s queues:1=@%s -- --id=@%s create Queue other-config:min-rate=%s' % (ovs_port, qos_name, qos_name, bandwidth_in_b, queue_name, queue_name, bandwidth_in_b);
 
         LOG.info(_(command));
         result = os.popen(command);
