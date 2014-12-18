@@ -1584,6 +1584,14 @@ def app_create(context, values):
     return app_ref
 
 
+def get_apps_in_instance(context, instance_uuid):
+
+    result = model_query(context, models.App).\
+            filter_by(instance_uuid=instance_uuid)
+
+    return result;
+
+
 def get_app_by_uuid(context, app_uuid):
     result = model_query(context, models.App).\
             filter_by(app_uuid=app_uuid).\

@@ -703,7 +703,7 @@ class ComputeAPI(object):
                    destroy_disks=destroy_disks, migrate_data=migrate_data)
 
 
-    def create_queue_for_bandwidth(self, context, host, instance, bandwidth):
+    def create_queue_for_bandwidth(self, context, host, instance, apps):
 
         if self.client.can_send_version('3.27'):
             version = '3.27'
@@ -711,7 +711,7 @@ class ComputeAPI(object):
             version = '3.0'
             instance = jsonutils.to_primitive(instance)
 
-        msg_kwargs = {'instance': instance, 'bandwidth': bandwidth};
+        msg_kwargs = {'instance': instance, 'apps': apps};
 
         cctxt = self.client.prepare(server=host, version=version)
         cctxt.cast(context, 'create_queue_for_bandwidth', **msg_kwargs)

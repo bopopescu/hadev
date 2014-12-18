@@ -2330,7 +2330,7 @@ class ComputeManager(manager.Manager):
     @reverts_task_state
     @wrap_instance_event
     @wrap_instance_fault
-    def create_queue_for_bandwidth(self, context, instance, bandwidth):
+    def create_queue_for_bandwidth(self, context, instance, apps):
 
         port_id = self.network_api.get_port_of_instance(context, instance);
 
@@ -2339,15 +2339,18 @@ class ComputeManager(manager.Manager):
         else:
             LOG.info(_('port id valid'));
 
-        queue_id = self.driver.create_queue_for_bandwidth(context,
-                                                          port_id,
-                                                          bandwidth);
+        qids = self.driver.create_queue_for_bandwidth(context,
+                                                port_id,
+                                                instance['network_bandwidth'],
+                                                apps);
 
-        if queue_id == None:
+        if qids == None:
             LOG.info(_('none queue id'));
         else:
             LOG.info(_('queue id valid'));
-            LOG.info(_(queue_id));
+            for qid in qids:
+                LOG.info(_(qid));
+
 
 
 

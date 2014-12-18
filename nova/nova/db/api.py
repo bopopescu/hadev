@@ -656,6 +656,11 @@ def get_app_by_uuid(context, app_uuid):
 
 
 
+def get_apps_in_instance(context, instance_uuid):
+    """Get apps (id, bandwidth) in instance."""
+    return IMPL.get_apps_in_instance(context, instance_uuid)
+
+
 def instance_destroy(context, instance_uuid, constraint=None,
         update_cells=True):
     """Destroy the instance or raise if it does not exist."""

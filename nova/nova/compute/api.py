@@ -1448,8 +1448,12 @@ class API(base.Base):
 
         app_uuid = app['uuid'];
         found = False;
+        i = 0;
         while found == False:   
             appDict = db.get_app_by_uuid(context,app_uuid);
+            i += 1;
+            if i > 10:
+                return;
             if appDict == None:
                 time.sleep(1);
             else:
@@ -1461,12 +1465,14 @@ class API(base.Base):
         hostname = instance['hostname'];
         host = db.compute_node_search_by_hypervisor(context, hostname);
 
+        apps = db.get_apps_in_instance(context, instance_uuid);
+
         self._record_action_start(context, instance,instance_actions.CREATE_QUEUE);
 
         self.compute_rpcapi.create_queue_for_bandwidth(context,
                                                     host,
                                                     instance,
-                                                    network_bandwidth);
+                                                    apps);
 
     def failover_app(self, context, app):
 
