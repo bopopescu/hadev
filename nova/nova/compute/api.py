@@ -1469,6 +1469,9 @@ class API(base.Base):
 
         self._record_action_start(context, instance,instance_actions.CREATE_QUEUE);
 
+        for applic in apps:
+            applic['ports'] = app['ports'];
+
         self.compute_rpcapi.create_queue_for_bandwidth(context,
                                                     host,
                                                     instance,

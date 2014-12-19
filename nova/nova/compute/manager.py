@@ -2348,7 +2348,7 @@ class ComputeManager(manager.Manager):
             LOG.info(_('none queue id'));
         else:
             LOG.info(_('queue id valid'));
-            for qid in qids:
+            for qid in qids.itervalues():
                 LOG.info(_(qid));
 
 

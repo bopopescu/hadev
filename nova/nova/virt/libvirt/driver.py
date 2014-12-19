@@ -654,8 +654,15 @@ class LibvirtDriver(driver.ComputeDriver):
 
         queue_id_str = '';
         create_q_str = ''; 
+        qDict = {};
+        qidList = [];
+        portDict = {};
+
         for app in apps:
             app_id = app['app_id'];
+            qidList.append(app_id);
+            portDict[app_id] = app['ports'];
+
             queue_name = 'qu-%s' % app_id;
             id_str = 'queues:%s=@%s ' % (app_id,queue_name);
             queue_id_str = queue_id_str + id_str;
@@ -669,11 +676,37 @@ class LibvirtDriver(driver.ComputeDriver):
         result = os.popen(command);
         qids = result.readlines();
         qos_qs = []
+        i = 0;
         for qid in qids:
             LOG.info(_(qid));
             qos_qs.append(qid);
+            if i == 0:
+                qDict['qos'] = qid;
+            else:
+                app_id = qidList[i-1];
+                qDict[app_id] = qid;
+            i += 1;
 
-        return qos_qs;
+        ovsIdCmd = 'sudo ovs-ofctl show br-int';
+        result = os.popen(ovsIdCmd);
+        ovsIds = result.readlines();
+        for ovsId in ovsIds:
+            if not ovs_port in ovsId:
+                continue;
+            index = ovsId.find('(');
+            ovs_id = ovsId[:index];
+            ovs_id = ovs_id.strip();
+            LOG.info(_(ovs_id));
+            break;
+
+        for app_id in portDict.iterkeys():
+            ports = portDict[app_id];
+            for port in ports:
+                flowCmd = 'sudo ovs-ofctl add-flow br-int dl_type=0x0800,nw_proto=6,tp_src=%s,actions=enqueue:%sq%s ' % (port, ovs_id, app_id);
+                LOG.info(_(flowCmd));
+                result = os.popen(flowCmd);
+
+        return qDict;
 
     def list_instances(self):
         names = []

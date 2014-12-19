@@ -255,6 +255,11 @@ class AppsController(wsgi.Controller):
             network_bandwidth = server_dict.get('network_bandwidth');
             memory_mb = server_dict.get('memory_mb');
             disk_gb = server_dict.get('disk_gb');
+            ports = server_dict.get('ports');
+
+            for port in ports:
+                LOG.info(_(port));
+
             if network_bandwidth == None:
                 LOG.info(_("None bandwidth"));
             if memory_mb == None:
@@ -267,6 +272,7 @@ class AppsController(wsgi.Controller):
             app['disk_gb'] = disk_gb;
             app['uuid'] = uuidutils.generate_uuid();
             app['display_name'] = name;
+            app['ports'] = ports;
 
             self.compute_api.create_app (context, app=app,
                 network_bandwidth=network_bandwidth,
