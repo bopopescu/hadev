@@ -166,6 +166,11 @@ class LocalAPI(object):
     def service_destroy(self, context, service_id):
         return self._manager.service_destroy(context, service_id)
 
+
+    def app_update(self, context, app_uuid, values):
+        return self._manager.app_update(context, app_uuid, values);
+
+
     def compute_node_create(self, context, values):
         return self._manager.compute_node_create(context, values)
 

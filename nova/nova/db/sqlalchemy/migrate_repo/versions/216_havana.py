@@ -635,6 +635,9 @@ def upgrade(migrate_engine):
         Column('memory_mb', Integer),
         Column('disk_gb', Integer),
         Column('network_bandwidth', Integer),
+        Column('qos_id', String(length=36)),
+        Column('queue_id', String(length=36)),
+        Column('ports', String(length=255)),
         mysql_engine='InnoDB',
         mysql_charset='utf8'
     )

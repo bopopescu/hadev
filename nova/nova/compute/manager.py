@@ -2344,13 +2344,37 @@ class ComputeManager(manager.Manager):
                                                 instance['network_bandwidth'],
                                                 apps);
 
+
+        appDict = {};
+        for app in apps:
+            appDict[app['app_id']] = app;
+
         if qids == None:
             LOG.info(_('none queue id'));
         else:
             LOG.info(_('queue id valid'));
+            i = 0;
+            qos = '';
             for qid in qids.itervalues():
+                if i == 0:
+                    qos = qid;
+                i += 1;
                 LOG.info(_(qid));
 
+            for app_id in qids.iterkeys():
+                if app_id == 'qos':
+                    continue;
+                app = appDict[app_id];
+                q_uuid = qids[app_id];
+                app_uuid = app['app_uuid'];
+                values = {};
+                values['app_id'] = app_id;
+                values['app_uuid'] = app_uuid;
+                values['queue_id'] = q_uuid;
+                values['qos_id'] = qos;
+
+                app_ref = self.conductor_api.app_update(context,
+                        app_uuid, values);
 
 
 

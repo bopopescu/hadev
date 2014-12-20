@@ -314,6 +314,12 @@ class ConductorManager(manager.Manager):
         result = self.db.compute_node_create(context, values)
         return jsonutils.to_primitive(result)
 
+
+    def app_update(self, context, app_uuid, values):
+        app_ref = self.db.app_update(context, app_uuid, values)
+        return app_ref;
+
+
     def compute_node_update(self, context, node, values):
         result = self.db.compute_node_update(context, node['id'], values)
         return jsonutils.to_primitive(result)

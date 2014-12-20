@@ -340,10 +340,14 @@ class App(BASE, NovaBase):
     memory_mb = Column(Integer)
 
     disk_gb = Column(Integer)
-    
+ 
     network_bandwidth = Column(Integer)
 
+    qos_id = Column(String(36))
 
+    queue_id = Column(String(36))
+
+    ports = Column(String(255))
 
 class InstanceInfoCache(BASE, NovaBase):
     """Represents a cache of information about an instance

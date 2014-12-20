@@ -106,6 +106,7 @@ class FilterScheduler(driver.Scheduler):
         values['instance_uuid'] = instance['uuid'];
         values['instance_id'] = instance['id'];
         values['hostname'] = instance['hostname'];
+        values['ports'] = ''.join(str(port) for port in app['ports']);
 
         app_ref = db.app_create(context, values);
 

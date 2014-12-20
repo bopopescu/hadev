@@ -1469,9 +1469,6 @@ class API(base.Base):
 
         self._record_action_start(context, instance,instance_actions.CREATE_QUEUE);
 
-        for applic in apps:
-            applic['ports'] = app['ports'];
-
         self.compute_rpcapi.create_queue_for_bandwidth(context,
                                                     host,
                                                     instance,
@@ -3155,6 +3152,9 @@ class API(base.Base):
         """Detach an network adapter from an instance."""
         self.compute_rpcapi.detach_interface(context, instance=instance,
             port_id=port_id)
+
+
+
 
     @wrap_check_policy
     def get_instance_metadata(self, context, instance):

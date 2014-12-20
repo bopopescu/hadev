@@ -274,6 +274,13 @@ class ConductorAPI(object):
         cctxt = self.client.prepare()
         return cctxt.call(context, 'compute_node_create', values=values)
 
+
+    def app_update(self, context, app_uuid, values):
+        cctxt = self.client.prepare()
+        return cctxt.call(context, 'app_update',
+                app_uuid=app_uuid,
+                values=values);
+
     def compute_node_update(self, context, node, values):
         node_p = jsonutils.to_primitive(node)
         cctxt = self.client.prepare()
