@@ -661,7 +661,7 @@ class LibvirtDriver(driver.ComputeDriver):
         for app in apps:
             app_id = app['app_id'];
             qidList.append(app_id);
-            portDict[app_id] = app['ports'];
+            portDict[app_id] = app['ports'].split();
 
             queue_name = 'qu-%s' % app_id;
             id_str = 'queues:%s=@%s ' % (app_id,queue_name);
