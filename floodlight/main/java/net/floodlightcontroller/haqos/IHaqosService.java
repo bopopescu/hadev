@@ -23,5 +23,7 @@ import net.floodlightcontroller.util.MACAddress;
 public interface IHaqosService extends IFloodlightService {
 
     public void printTest();
+    public void createQueuesOnPath(long srcId,
+        String srcPort, long dstId, String dstPort, long bandwidth);
 
 }

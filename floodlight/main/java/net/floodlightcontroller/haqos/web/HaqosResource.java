@@ -22,6 +22,8 @@ import java.util.Map;
 
 import net.floodlightcontroller.packet.IPv4;
 
+import org.openflow.util.HexString;
+
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonToken;
@@ -49,5 +51,24 @@ public class HaqosResource extends HaqosResourceBase {
         result.put(switchId, values);
         return result;
     }
- 
+
+
+    @Put
+    public String createQueuesOnPath() {
+        long srcId =
+            HexString.toLong((String) getRequestAttributes().get("src-dpid"));
+        String srcPort = (String) getRequestAttributes().get("src-port");
+        long dstId =
+            HexString.toLong((String) getRequestAttributes().get("dst-dpid"));
+        String dstPort = (String) getRequestAttributes().get("dst-port");
+        long bandwidth =
+            Long.parseLong((String) getRequestAttributes().get("bandwidth"));
+
+        boolean result =
+            createQueuesOnPath (srcId, srcPort, dstId, dstPort, bandwidth);
+
+        return "{\"status\":\"ok\"}";
+    }
+
+
 }

@@ -17,6 +17,7 @@
 
 package net.floodlightcontroller.haqos;
 
+import java.io.*;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -29,6 +30,8 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.lang.Process;
+import java.lang.ProcessBuilder;
 
 import net.floodlightcontroller.core.FloodlightContext;
 import net.floodlightcontroller.core.HAListenerTypeMarker;
@@ -94,6 +97,43 @@ public class Haqos
 
     @Override
     public void printTest() {
+    }
+
+
+    @Override
+    public void createQueuesOnPath(long srcId,
+        String srcPort, long dstId, String dstPort, long bandwidth) {
+        /* 
+         * Create egress queue based on srcPort if srcId = dstId
+         */
+        if (srcId == dstId) {
+            IOFSwitch sw = floodlightProvider.getSwitch(srcId);
+            ImmutablePort port = sw.getPort(srcPort);
+            short portNum = port.getPortNumber();
+            String qosName = "qos" + portNum;
+            String queueName = "qu" + portNum;
+            String[] command = {"python",
+                "/home/snathan/floodlight-master/src/main/java/net/floodlightcontroller/haqos/CreateQueues.py",
+                "--qName=" + queueName, "--srcPort=" + srcPort, "--qosName=" + qosName, "--qNum=" + portNum,
+                "--bandwidth=" + bandwidth};
+            //String [] command = {"sudo", "ls", "-l"};
+            //log.info(command);
+            Process cmdProcess;
+            try {
+                log.info(" before start ");
+                cmdProcess = new ProcessBuilder(command).start();
+                log.info(" after start ");
+                InputStream inputStream = cmdProcess.getInputStream();
+                InputStreamReader inputReader = new InputStreamReader(inputStream);
+                BufferedReader bufReader = new BufferedReader(inputReader);
+                String line;
+                while ((line = bufReader.readLine()) != null) {
+                  log.info(line);
+                }
+            } catch (IOException e) {
+                log.info("io exception ");
+            }
+        }
     }
 
     @Override

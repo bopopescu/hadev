@@ -27,6 +27,7 @@ import net.floodlightcontroller.packet.IPv4;
 import net.floodlightcontroller.core.IFloodlightProviderService;
 import net.floodlightcontroller.core.IOFSwitch;
 import net.floodlightcontroller.core.annotations.LogMessageDoc;
+import net.floodlightcontroller.haqos.IHaqosService;
 
 import org.openflow.protocol.OFMatch;
 import org.openflow.protocol.OFPort;
@@ -64,9 +65,9 @@ public class HaqosResourceBase extends ServerResource {
         List<OFPacketQueue> values = null;
         if (sw != null) {
             OFQueueGetConfigRequest req =
-                new OFQueueGetConfigRequest(OFPort.OFPP_ALL.getValue());
-            int requestLength = req.getLengthU();
-            req.setLengthU(requestLength);
+                new OFQueueGetConfigRequest(OFPort.OFPP_NONE.getValue());
+            //int requestLength = req.getLengthU();
+            //req.setLengthU(requestLength);
             try {
                 future = sw.queueGetConfig(req);
                 values = future.get(10, TimeUnit.SECONDS);
@@ -80,5 +81,25 @@ public class HaqosResourceBase extends ServerResource {
     public List <OFPacketQueue> getQueuesOnSwitch(String switchId) {
         return getQueuesOnSwitch(HexString.toLong(switchId));
     }
-    
+
+
+    public boolean createQueuesOnPath(
+        long srcId,
+        String srcPort,
+        long dstId,
+        String dstPort,
+        long bandwidth) {
+
+        IHaqosService haqos =
+                (IHaqosService)getContext().getAttributes().
+                    get(IHaqosService.class.getCanonicalName());
+
+        haqos.createQueuesOnPath(srcId,
+                                srcPort,
+                                dstId,
+                                dstPort,
+                                bandwidth);
+        return true;
+    }
+
 }

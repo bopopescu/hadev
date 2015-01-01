@@ -41,6 +41,7 @@ public class HaqosWebRoutable implements RestletRoutable {
     public Router getRestlet(Context context) {
         Router router = new Router(context);
         router.attach("/queues/{switchId}/list/json", HaqosResource.class); // GET
+        router.attach("/addqueues/{src-dpid}/{src-port}/{dst-dpid}/{dst-port}/{bandwidth}/json", HaqosResource.class); // POST
         return router;
     }
 
