@@ -26,6 +26,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.ListIterator;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -59,7 +60,9 @@ import net.floodlightcontroller.linkdiscovery.ILinkDiscoveryService;
 import net.floodlightcontroller.haqos.web.HaqosWebRoutable;
 import net.floodlightcontroller.restserver.IRestApiService;
 import net.floodlightcontroller.routing.IRoutingService;
+import net.floodlightcontroller.routing.Route;
 import net.floodlightcontroller.topology.ITopologyService;
+import net.floodlightcontroller.topology.NodePortTuple;
 import net.floodlightcontroller.threadpool.IThreadPoolService;
 
 import org.openflow.protocol.OFFlowMod;
@@ -91,12 +94,46 @@ public class Haqos
     //protected IThreadPoolService threadPool;
     protected IFloodlightProviderService floodlightProvider;
     //protected ITopologyService topology;
-    //protected IRoutingService routing;
+    protected IRoutingService routingEngine;
     protected IRestApiService restApi;
 
+    protected HashMap<String, String> qosMap;
+
+    protected HashMap<String, List<String>> queueMap;
 
     @Override
     public void printTest() {
+    }
+
+
+    private void callOvsUsingProcess(String[] command, String srcPort) {
+
+        try {
+            log.info(" before start ");
+            Process cmdProcess = new ProcessBuilder(command).start();
+            log.info(" after start ");
+            InputStream inputStream = cmdProcess.getInputStream();
+            InputStreamReader inputReader = new InputStreamReader(inputStream);
+            BufferedReader bufReader = new BufferedReader(inputReader);
+            String line;
+            int i = 0;
+            List<String> qidList = new ArrayList<String> ();
+            while ((line = bufReader.readLine()) != null) {
+                if (line == "") {
+                    continue;
+                }
+                if (i == 0) {
+                    qosMap.put(srcPort, line);
+                } else {
+                    qidList.add(line);
+                }
+                i += 1;
+                log.info(line);
+            }
+            queueMap.put(srcPort, qidList);
+        } catch (IOException e) {
+            log.info("io exception ");
+        }
     }
 
 
@@ -106,33 +143,52 @@ public class Haqos
         /* 
          * Create egress queue based on srcPort if srcId = dstId
          */
+        IOFSwitch sw = floodlightProvider.getSwitch(srcId);
+        ImmutablePort port = sw.getPort(srcPort);
+        short portNum = port.getPortNumber();
+
+        ImmutablePort dstImmPort = sw.getPort(dstPort);
+        short dstPortNum = dstImmPort.getPortNumber();
+
         if (srcId == dstId) {
-            IOFSwitch sw = floodlightProvider.getSwitch(srcId);
-            ImmutablePort port = sw.getPort(srcPort);
-            short portNum = port.getPortNumber();
             String qosName = "qos" + portNum;
             String queueName = "qu" + portNum;
             String[] command = {"python",
                 "/home/snathan/floodlight-master/src/main/java/net/floodlightcontroller/haqos/CreateQueues.py",
                 "--qName=" + queueName, "--srcPort=" + srcPort, "--qosName=" + qosName, "--qNum=" + portNum,
                 "--bandwidth=" + bandwidth};
-            //String [] command = {"sudo", "ls", "-l"};
-            //log.info(command);
-            Process cmdProcess;
-            try {
-                log.info(" before start ");
-                cmdProcess = new ProcessBuilder(command).start();
-                log.info(" after start ");
-                InputStream inputStream = cmdProcess.getInputStream();
-                InputStreamReader inputReader = new InputStreamReader(inputStream);
-                BufferedReader bufReader = new BufferedReader(inputReader);
-                String line;
-                while ((line = bufReader.readLine()) != null) {
-                  log.info(line);
+
+            callOvsUsingProcess(command, srcPort);
+        } else {
+            Route route =
+                routingEngine.getRoute(srcId, portNum, dstId, dstPortNum, 0);
+            List<NodePortTuple> switches = route.getPath();
+            ListIterator<NodePortTuple> iter = switches.listIterator();
+            int i = 0;
+            while(iter.hasNext()) {
+                NodePortTuple tuple = iter.next();
+                long switchId = tuple.getNodeId();
+                i += 1;
+                if (switchId == srcId || switchId == dstId) {
+                    continue;
                 }
-            } catch (IOException e) {
-                log.info("io exception ");
+                if ((i % 2) == 0) {
+                    continue;
+                }
+                short portId = tuple.getPortId();
+ 
+                sw = floodlightProvider.getSwitch(switchId);
+                port = sw.getPort(portId);
+                String portName = port.getName();
+                String qosName = "qos" + portId;
+                String queueName = "qu" + portId;
+                String[] command = {"python",
+                  "/home/snathan/floodlight-master/src/main/java/net/floodlightcontroller/haqos/CreateQueues.py",
+                  "--qName=" + queueName, "--srcPort=" + portName, "--qosName=" + qosName, "--qNum=" + portId,
+                  "--bandwidth=" + bandwidth};
+                callOvsUsingProcess(command, portName);
             }
+
         }
     }
 
@@ -167,7 +223,7 @@ public class Haqos
         //l.add(IThreadPoolService.class);
         l.add(IFloodlightProviderService.class);
         //l.add(ITopologyService.class);
-        //l.add(IRoutingService.class);
+        l.add(IRoutingService.class);
         l.add(IRestApiService.class);
         return l;
     }
@@ -181,8 +237,11 @@ public class Haqos
         floodlightProvider =
                 context.getServiceImpl(IFloodlightProviderService.class);
         //topology = context.getServiceImpl(ITopologyService.class);
-        //routing = context.getServiceImpl(IRoutingService.class);
+        routingEngine = context.getServiceImpl(IRoutingService.class);
         restApi = context.getServiceImpl(IRestApiService.class);
+
+        qosMap = new HashMap<String, String> ();
+        queueMap = new HashMap<String, List<String>>();
         log.info("at init of Haqos");
 
     }
