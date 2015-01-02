@@ -34,6 +34,10 @@ import org.openflow.protocol.OFPort;
 import org.openflow.protocol.OFQueueGetConfigRequest;
 import org.openflow.protocol.OFQueueGetConfigReply;
 import org.openflow.protocol.OFPacketQueue;
+import org.openflow.protocol.statistics.OFStatistics;
+import org.openflow.protocol.statistics.OFStatisticsType;
+import org.openflow.protocol.OFStatisticsRequest;
+import org.openflow.protocol.statistics.OFQueueStatisticsRequest;
 
 
 import com.fasterxml.jackson.core.JsonParseException;
@@ -54,31 +58,16 @@ public class HaqosResourceBase extends ServerResource {
     protected static Logger log = LoggerFactory.getLogger(HaqosResource.class);
     
     
-    public List <OFPacketQueue> getQueuesOnSwitch(long switchId) {
+    public List <OFStatistics> getQueuesOnSwitch(long switchId) {
         
-        IFloodlightProviderService floodlightProvider =
-                (IFloodlightProviderService)getContext().getAttributes().
-                    get(IFloodlightProviderService.class.getCanonicalName());
+        IHaqosService haqos =
+                (IHaqosService)getContext().getAttributes().
+                    get(IHaqosService.class.getCanonicalName());
 
-        IOFSwitch sw = floodlightProvider.getSwitch(switchId);
-        Future<List<OFPacketQueue>> future;
-        List<OFPacketQueue> values = null;
-        if (sw != null) {
-            OFQueueGetConfigRequest req =
-                new OFQueueGetConfigRequest(OFPort.OFPP_NONE.getValue());
-            //int requestLength = req.getLengthU();
-            //req.setLengthU(requestLength);
-            try {
-                future = sw.queueGetConfig(req);
-                values = future.get(10, TimeUnit.SECONDS);
-            } catch (Exception e) {
-                log.error("Failure retrieving queues from switch " + sw, e);
-            }
-        }
-        return values;
+        return haqos.getQueuesOnSwitch(switchId);
     }
 
-    public List <OFPacketQueue> getQueuesOnSwitch(String switchId) {
+    public List <OFStatistics> getQueuesOnSwitch(String switchId) {
         return getQueuesOnSwitch(HexString.toLong(switchId));
     }
 

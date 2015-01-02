@@ -17,8 +17,10 @@
 package net.floodlightcontroller.haqos;
 
 import java.util.Collection;
+import java.util.List;
 import net.floodlightcontroller.core.module.IFloodlightService;
 import net.floodlightcontroller.util.MACAddress;
+import org.openflow.protocol.statistics.OFStatistics;
 
 public interface IHaqosService extends IFloodlightService {
 
@@ -26,4 +28,5 @@ public interface IHaqosService extends IFloodlightService {
     public void createQueuesOnPath(long srcId,
         String srcPort, long dstId, String dstPort, long bandwidth);
 
+    public List <OFStatistics> getQueuesOnSwitch(long switchId);
 }

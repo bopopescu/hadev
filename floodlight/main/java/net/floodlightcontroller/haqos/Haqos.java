@@ -33,6 +33,9 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.lang.Process;
 import java.lang.ProcessBuilder;
+import java.util.List;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import net.floodlightcontroller.core.FloodlightContext;
 import net.floodlightcontroller.core.HAListenerTypeMarker;
@@ -70,6 +73,12 @@ import org.openflow.protocol.OFFlowRemoved;
 import org.openflow.protocol.OFMatch;
 import org.openflow.protocol.OFMessage;
 import org.openflow.protocol.OFType;
+import org.openflow.protocol.OFMatch;
+import org.openflow.protocol.OFPort;
+import org.openflow.protocol.statistics.OFStatistics;
+import org.openflow.protocol.statistics.OFStatisticsType;
+import org.openflow.protocol.OFStatisticsRequest;
+import org.openflow.protocol.statistics.OFQueueStatisticsRequest;
 import org.openflow.util.HexString;
 import org.openflow.util.U16;
 import org.slf4j.Logger;
@@ -104,6 +113,35 @@ public class Haqos
     @Override
     public void printTest() {
     }
+
+
+    @Override
+    public List <OFStatistics> getQueuesOnSwitch(long switchId) {
+        
+        IOFSwitch sw = floodlightProvider.getSwitch(switchId);
+        Future<List<OFStatistics>> future;
+        List<OFStatistics> values = null;
+        if (sw != null) {
+            OFStatisticsRequest req = new OFStatisticsRequest();
+            req.setStatisticType(OFStatisticsType.QUEUE);
+            int reqLength = req.getLengthU();
+            OFQueueStatisticsRequest specReq = new OFQueueStatisticsRequest();
+            specReq.setPortNumber(OFPort.OFPP_ALL.getValue());
+            specReq.setQueueId(0xffffffff);
+            req.setStatistics(Collections.singletonList((OFStatistics)specReq));
+            reqLength += specReq.getLength();
+            req.setLengthU(reqLength);
+            try {
+                future = sw.queryStatistics(req);
+                values = future.get(10, TimeUnit.SECONDS);
+                log.info("after getting values");
+            } catch (Exception e) {
+                log.error("Failure retrieving queues from switch " + sw, e);
+            }
+        }
+        return values;
+    }
+
 
 
     private void callOvsUsingProcess(String[] command, String srcPort) {
