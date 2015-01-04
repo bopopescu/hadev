@@ -30,6 +30,7 @@ import java.util.ListIterator;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.HashSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.lang.Process;
 import java.lang.ProcessBuilder;
@@ -130,16 +131,69 @@ public class Haqos
 
     @Override
     public void topologyChanged(List<LDUpdate> appliedUpdates) {
+
         for (RouteId routeId : routeMap.keySet()) {
-          Route route = routeMap.get(routeId);
-          short srcPort = sourcePortMap.get(routeId).shortValue();
-          short dstPort = destPortMap.get(routeId).shortValue();
-          Route newRoute = routingEngine.getRoute(routeId.getSrc(), srcPort,
+            Route route = routeMap.get(routeId);
+            short srcPort = sourcePortMap.get(routeId).shortValue();
+            short dstPort = destPortMap.get(routeId).shortValue();
+            Route newRoute = routingEngine.getRoute(routeId.getSrc(), srcPort,
                                     routeId.getDst(), dstPort, 0);
-          if (newRoute != route) {
-              /*Need to update the queues*/
+            if (newRoute != route) {
+                /*Need to update the queues*/
+                List<NodePortTuple> newSwitches = newRoute.getPath();
+                HashSet<Long> dpIdSet = new HashSet<Long>();
+                HashSet<Long> oldIdSet = new HashSet<Long>();
+                for (NodePortTuple nodes : newSwitches) {
+                    long switchDpId = nodes.getNodeId();
+                    dpIdSet.add(new Long(switchDpId));
+                }
+
+                List<NodePortTuple> oldSwitches = route.getPath();
+                for (NodePortTuple nodes : oldSwitches) {
+                    Long switchDpId = new Long(nodes.getNodeId());
+                    oldIdSet.add(switchDpId);
+                    if (dpIdSet.contains(switchDpId) == false) {
+                        updateQueueOnPort(nodes.getPortId(),
+                            bandwidthMap.get(routeId).longValue());
+                    }
+                }
+                long useBandwidth = bandwidthMap.get(routeId).longValue();
+                long bandwidth = useBandwidth;
+                for (NodePortTuple nodes : newSwitches) {
+                    long switchDpId = nodes.getNodeId();
+                    Long dpId = new Long(switchDpId);
+                    short portId = nodes.getPortId();
+                    if (oldIdSet.contains(dpId)) {
+                        continue;
+                    }
+                    if (portRouteMap.containsKey(portId)) {
+                         useBandwidth = getUpdatedBandwidth(portId, newRoute.getId(), bandwidth);
+                    } else {
+                        List<RouteId> routes = new ArrayList<RouteId>();
+                        routes.add(newRoute.getId());
+                        portRouteMap.put(portId, routes);
+                    }
+                    IOFSwitch sw = floodlightProvider.getSwitch(switchDpId);
+                    ImmutablePort port = sw.getPort(portId);
+                    String portName = port.getName();
+                    String qosName = "qos" + portId;
+                    String queueName = "qu" + portId;
+                    String[] command = {"python",
+                      "/home/snathan/floodlight-master/src/main/java/net/floodlightcontroller/haqos/CreateQueues.py",
+                      "--qName=" + queueName, "--srcPort=" + portName, "--qosName=" + qosName, "--qNum=" + portId,
+                      "--bandwidth=" + useBandwidth};
+                    callOvsUsingProcess(command, portName);
+              }
+              bandwidthMap.remove(routeId);
+              bandwidthMap.put(newRoute.getId(), bandwidth);
+              routeMap.remove(routeId);
+              routeMap.put(newRoute.getId(), newRoute);
           }
         }
+    }
+
+
+    private void updateQueueOnPort (short portId, long bandwidth) {
     }
 
 
