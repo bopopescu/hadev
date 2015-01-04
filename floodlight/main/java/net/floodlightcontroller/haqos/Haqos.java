@@ -64,9 +64,13 @@ import net.floodlightcontroller.haqos.web.HaqosWebRoutable;
 import net.floodlightcontroller.restserver.IRestApiService;
 import net.floodlightcontroller.routing.IRoutingService;
 import net.floodlightcontroller.routing.Route;
+import net.floodlightcontroller.routing.RouteId;
 import net.floodlightcontroller.topology.ITopologyService;
+import net.floodlightcontroller.topology.ITopologyListener;
 import net.floodlightcontroller.topology.NodePortTuple;
 import net.floodlightcontroller.threadpool.IThreadPoolService;
+import net.floodlightcontroller.linkdiscovery.ILinkDiscovery.LDUpdate;
+import net.floodlightcontroller.linkdiscovery.ILinkDiscoveryService;
 
 import org.openflow.protocol.OFFlowMod;
 import org.openflow.protocol.OFFlowRemoved;
@@ -93,7 +97,8 @@ import org.slf4j.LoggerFactory;
 
 
 public class Haqos
-    implements IFloodlightModule, IHaqosService,IOFMessageListener {
+    implements IFloodlightModule, IHaqosService,
+               IOFMessageListener, ITopologyListener {
     protected static Logger log = LoggerFactory.getLogger(Haqos.class);
 
 
@@ -102,16 +107,39 @@ public class Haqos
     //protected ILinkDiscoveryService linkDiscovery;
     //protected IThreadPoolService threadPool;
     protected IFloodlightProviderService floodlightProvider;
-    //protected ITopologyService topology;
+    protected ITopologyService topology;
     protected IRoutingService routingEngine;
     protected IRestApiService restApi;
 
-    protected HashMap<String, String> qosMap;
+    protected HashMap<String /*Switch DPID*/, String /*qosId*/ > qosMap;
 
-    protected HashMap<String, List<String>> queueMap;
+    protected HashMap<String /*Switch DPID*/, List<String> /*List of queueId*/ > queueMap;
+
+    protected HashMap<RouteId, Route> routeMap;
+    protected HashMap<RouteId, Short> sourcePortMap;
+    protected HashMap<RouteId, Short> destPortMap;
+
+    protected HashMap<RouteId, Long> bandwidthMap;
+
+    protected HashMap<Short /*Port number*/, List<RouteId> /*List of routes associated*/ > portRouteMap;
 
     @Override
     public void printTest() {
+    }
+
+
+    @Override
+    public void topologyChanged(List<LDUpdate> appliedUpdates) {
+        for (RouteId routeId : routeMap.keySet()) {
+          Route route = routeMap.get(routeId);
+          short srcPort = sourcePortMap.get(routeId).shortValue();
+          short dstPort = destPortMap.get(routeId).shortValue();
+          Route newRoute = routingEngine.getRoute(routeId.getSrc(), srcPort,
+                                    routeId.getDst(), dstPort, 0);
+          if (newRoute != route) {
+              /*Need to update the queues*/
+          }
+        }
     }
 
 
@@ -174,6 +202,26 @@ public class Haqos
         }
     }
 
+    private long getUpdatedBandwidth(short portId, RouteId addRoute, long bandwidth)
+    {
+        List<RouteId> routesOnPort = portRouteMap.get(portId);
+        ListIterator<RouteId> iter = routesOnPort.listIterator();
+        long updatedBandwidth = bandwidth;
+        boolean alreadyAdded = false;
+        while (iter.hasNext()) {
+            RouteId routeId = iter.next();
+            if (routeId == addRoute) {
+                alreadyAdded = true;
+                continue;
+            }
+            updatedBandwidth += bandwidthMap.get(routeId).longValue();
+        }
+        if (alreadyAdded == false) {
+            routesOnPort.add(addRoute);
+            portRouteMap.put(portId, routesOnPort);
+        }
+        return updatedBandwidth;
+    }
 
     @Override
     public void createQueuesOnPath(long srcId,
@@ -203,9 +251,16 @@ public class Haqos
             List<NodePortTuple> switches = route.getPath();
             ListIterator<NodePortTuple> iter = switches.listIterator();
             int i = 0;
+            if (switches != null && switches.isEmpty() == false) {
+                routeMap.put(route.getId(), route);
+                sourcePortMap.put(route.getId(), new Short(portNum));
+                destPortMap.put(route.getId(), new Short(dstPortNum));
+                bandwidthMap.put(route.getId(), new Long(bandwidth));
+            }
             while(iter.hasNext()) {
                 NodePortTuple tuple = iter.next();
                 long switchId = tuple.getNodeId();
+                long useBandwidth = bandwidth;
                 i += 1;
                 if (switchId == srcId || switchId == dstId) {
                     continue;
@@ -214,7 +269,13 @@ public class Haqos
                     continue;
                 }
                 short portId = tuple.getPortId();
- 
+                if (portRouteMap.containsKey(portId)) {
+                     useBandwidth = getUpdatedBandwidth(portId, route.getId(), bandwidth);
+                } else {
+                    List<RouteId> routes = new ArrayList<RouteId>();
+                    routes.add(route.getId());
+                    portRouteMap.put(portId, routes);
+                }
                 sw = floodlightProvider.getSwitch(switchId);
                 port = sw.getPort(portId);
                 String portName = port.getName();
@@ -223,7 +284,7 @@ public class Haqos
                 String[] command = {"python",
                   "/home/snathan/floodlight-master/src/main/java/net/floodlightcontroller/haqos/CreateQueues.py",
                   "--qName=" + queueName, "--srcPort=" + portName, "--qosName=" + qosName, "--qNum=" + portId,
-                  "--bandwidth=" + bandwidth};
+                  "--bandwidth=" + useBandwidth};
                 callOvsUsingProcess(command, portName);
             }
 
@@ -260,7 +321,7 @@ public class Haqos
         //l.add(ILinkDiscoveryService.class);
         //l.add(IThreadPoolService.class);
         l.add(IFloodlightProviderService.class);
-        //l.add(ITopologyService.class);
+        l.add(ITopologyService.class);
         l.add(IRoutingService.class);
         l.add(IRestApiService.class);
         return l;
@@ -274,12 +335,17 @@ public class Haqos
         //threadPool = context.getServiceImpl(IThreadPoolService.class);
         floodlightProvider =
                 context.getServiceImpl(IFloodlightProviderService.class);
-        //topology = context.getServiceImpl(ITopologyService.class);
+        topology = context.getServiceImpl(ITopologyService.class);
         routingEngine = context.getServiceImpl(IRoutingService.class);
         restApi = context.getServiceImpl(IRestApiService.class);
 
         qosMap = new HashMap<String, String> ();
-        queueMap = new HashMap<String, List<String>>();
+        queueMap = new HashMap<String, List<String>> ();
+        routeMap = new HashMap<RouteId, Route> ();
+        sourcePortMap = new HashMap<RouteId, Short> ();
+        destPortMap = new HashMap<RouteId, Short> ();
+        bandwidthMap = new HashMap<RouteId, Long> ();
+        portRouteMap = new HashMap<Short, List<RouteId>> ();
         log.info("at init of Haqos");
 
     }
@@ -289,6 +355,7 @@ public class Haqos
     public void startUp(FloodlightModuleContext context) {
         floodlightProvider.addOFMessageListener(OFType.PACKET_IN, this);
         restApi.addRestletRoutable(new HaqosWebRoutable());
+        topology.addListener(this);
         log.info("at startUp of Haqos");
     }
 
