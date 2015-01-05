@@ -112,9 +112,9 @@ public class Haqos
     protected IRoutingService routingEngine;
     protected IRestApiService restApi;
 
-    protected HashMap<String /*Switch DPID*/, String /*qosId*/ > qosMap;
+    protected HashMap<String /*PortName*/, String /*qosId*/ > qosMap;
 
-    protected HashMap<String /*Switch DPID*/, List<String> /*List of queueId*/ > queueMap;
+    protected HashMap<String /*PortName*/, List<String> /*List of queueId*/ > queueMap;
 
     protected HashMap<RouteId, Route> routeMap;
     protected HashMap<RouteId, Short> sourcePortMap;
@@ -153,7 +153,7 @@ public class Haqos
                     Long switchDpId = new Long(nodes.getNodeId());
                     oldIdSet.add(switchDpId);
                     if (dpIdSet.contains(switchDpId) == false) {
-                        updateQueueOnPort(nodes.getPortId(),
+                        updateQueueOnPort(switchDpId.longValue(), nodes.getPortId(),
                             bandwidthMap.get(routeId).longValue());
                     }
                 }
@@ -183,17 +183,38 @@ public class Haqos
                       "--qName=" + queueName, "--srcPort=" + portName, "--qosName=" + qosName, "--qNum=" + portId,
                       "--bandwidth=" + useBandwidth};
                     callOvsUsingProcess(command, portName);
-              }
-              bandwidthMap.remove(routeId);
-              bandwidthMap.put(newRoute.getId(), bandwidth);
-              routeMap.remove(routeId);
-              routeMap.put(newRoute.getId(), newRoute);
-          }
+                }
+                bandwidthMap.remove(routeId);
+                bandwidthMap.put(newRoute.getId(), bandwidth);
+                routeMap.remove(routeId);
+                routeMap.put(newRoute.getId(), newRoute);
+            }
         }
     }
 
 
-    private void updateQueueOnPort (short portId, long bandwidth) {
+    private void updateQueueOnPort (long switchId, short portId, long bandwidth) {
+
+        IOFSwitch sw = floodlightProvider.getSwitch(switchId);
+        ImmutablePort port = sw.getPort(portId);
+        String portName = port.getName();
+        String qosName = qosMap.get(portName);
+        String[] command = {"python",
+            "/home/snathan/floodlight-master/src/main/java/net/floodlightcontroller/haqos/DeleteQos.py",
+            "--qosName=" + qosName, "--portName=" + portName};
+
+        deleteQosUsingProcess(command);
+
+        List<String> queueNames = queueMap.get(portName);
+        for (String queueName : queueNames) {
+
+            String [] cmd = {"python",
+                "/home/snathan/floodlight-master/src/main/java/net/floodlightcontroller/haqos/DeleteQueue.py",
+                "--queueName=" + queueName};
+            deleteQosUsingProcess(cmd);
+        }
+        qosMap.remove(portName);
+        queueMap.remove(portName);
     }
 
 
@@ -222,6 +243,19 @@ public class Haqos
             }
         }
         return values;
+    }
+
+
+
+    private void deleteQosUsingProcess(String[] command) {
+
+        try {
+            log.info(" before start ");
+            Process cmdProcess = new ProcessBuilder(command).start();
+            log.info(" after start ");
+        } catch (IOException e) {
+            log.info("io exception ");
+        }
     }
 
 
