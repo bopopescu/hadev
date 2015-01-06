@@ -260,6 +260,26 @@ public class Haqos
 
 
 
+    private boolean isTunnelPort(String[] command) {
+
+        try {
+            log.info(" before start ");
+            Process cmdProcess = new ProcessBuilder(command).start();
+            log.info(" after start ");
+            InputStream inputStream = cmdProcess.getInputStream();
+            InputStreamReader inputReader = new InputStreamReader(inputStream);
+            BufferedReader bufReader = new BufferedReader(inputReader);
+            String line;
+            int i = 0;
+            line = bufReader.readLine();
+            return (Integer.parseInt(line) == 1);
+        } catch (IOException e) {
+            log.info("io exception ");
+        }
+        return false;
+    }
+
+
     private void callOvsUsingProcess(String[] command, String srcPort) {
 
         try {
@@ -311,6 +331,49 @@ public class Haqos
         return updatedBandwidth;
     }
 
+
+    private int getTunnelNode (List<NodePortTuple> switches, int index) {
+        int size = switches.size();
+        for (int i = index; i < (index + 2); i++) {
+            NodePortTuple srcSwitch = switches.get(i);
+            long dpId = srcSwitch.getNodeId();
+            short portId = srcSwitch.getPortId();
+            IOFSwitch sw = floodlightProvider.getSwitch(dpId);
+            ImmutablePort port = sw.getPort(portId);
+            String portName = port.getName();
+            String[] command = {"python",
+              "/home/snathan/floodlight-master/src/main/java/net/floodlightcontroller/haqos/CreateQueues.py",
+              "--intName=" + portName};
+            if (isTunnelPort(command)) {
+                log.info("has tunnel port");
+                return i;
+            } else {
+                log.info("not tunnel port");
+            }
+        }
+        return -1;
+    }
+
+
+    private void addFlowsOnQueues (List<NodePortTuple> switches, short tcpPort) {
+        int size = switches.size();
+        int tunnelStart = getTunnelNode(switches, 0);
+        int tunnelEnd = 65536;
+        if (tunnelStart != -1) {
+            tunnelEnd = getTunnelNode(switches, size - 2);
+        }
+        int i = 0;
+        for (NodePortTuple node : switches) {
+            if (i <= tunnelStart || i >= tunnelEnd) {
+                continue;
+            }
+            long dpId = node.getNodeId();
+            short portId = node.getPortId();
+            // add code to add flows
+        }
+    }
+
+
     @Override
     public void createQueuesOnPath(long srcId,
         String srcPort, long dstId, String dstPort, long bandwidth) {
@@ -321,7 +384,8 @@ public class Haqos
         ImmutablePort port = sw.getPort(srcPort);
         short portNum = port.getPortNumber();
 
-        ImmutablePort dstImmPort = sw.getPort(dstPort);
+        IOFSwitch dstSw = floodlightProvider.getSwitch(dstId);
+        ImmutablePort dstImmPort = dstSw.getPort(dstPort);
         short dstPortNum = dstImmPort.getPortNumber();
 
         if (srcId == dstId) {
