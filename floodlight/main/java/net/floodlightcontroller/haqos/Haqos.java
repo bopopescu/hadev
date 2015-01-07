@@ -19,6 +19,10 @@ package net.floodlightcontroller.haqos;
 
 import java.io.*;
 import java.io.IOException;
+import java.net.InetAddress;
+import java.net.SocketAddress;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -334,7 +338,7 @@ public class Haqos
 
     private int getTunnelNode (List<NodePortTuple> switches, int index) {
         int size = switches.size();
-        for (int i = index; i < (index + 2); i++) {
+        for (int i = index; i < (index + 3); i += 2) {
             NodePortTuple srcSwitch = switches.get(i);
             long dpId = srcSwitch.getNodeId();
             short portId = srcSwitch.getPortId();
@@ -354,22 +358,80 @@ public class Haqos
         return -1;
     }
 
+    private int getIpAddressInInt(InetAddress srcInet) {
+        ByteBuffer buffer = ByteBuffer.allocate(Integer.SIZE/8);
+        buffer.put (srcInet.getAddress());
+        buffer.position(0);
+        return buffer.getInt();
+    }
 
-    private void addFlowsOnQueues (List<NodePortTuple> switches, short tcpPort) {
+
+    private void addFlowWithoutTunnel (List<NodePortTuple> switches,
+                                        short tcpPort) {
+        int i = 0;
         int size = switches.size();
-        int tunnelStart = getTunnelNode(switches, 0);
-        int tunnelEnd = 65536;
-        if (tunnelStart != -1) {
-            tunnelEnd = getTunnelNode(switches, size - 2);
+        NodePortTuple start = switches.get(0);
+        long dpId = start.getNodeId();
+        short portId = start.getPortId();
+        IOFSwitch sw = floodlightProvider.getSwitch(dpId);
+
+        InetSocketAddress srcIp = (InetSocketAddress)sw.getInetAddress();
+        InetAddress srcInet = srcIp.getAddress();
+        int srcNetworkAddress = getIpAddressInInt(srcInet);
+        OFMatch match = new OFMatch();
+        match.setNetworkSource(srcNetworkAddress);
+        match.setTransportSource(tcpPort);
+        OFFlowMod fm = new OFFlowMod ();
+        fm.setMatch(match);
+        for (i = 2; i < size - 2; i++) {
+            NodePortTuple node = switches.get(i);
+            
         }
+    }
+
+
+    private void addFlowWithTunnel (List<NodePortTuple> switches,
+        short tcpPort, int tunnelStart, int tunnelEnd) {
+
+        InetSocketAddress srcIp;
+        InetAddress srcInet;
+        int srcNetworkAddress;
         int i = 0;
         for (NodePortTuple node : switches) {
-            if (i <= tunnelStart || i >= tunnelEnd) {
+            if (i < tunnelStart || i >= tunnelEnd) {
+                i += 1;
                 continue;
             }
             long dpId = node.getNodeId();
             short portId = node.getPortId();
+            IOFSwitch sw = floodlightProvider.getSwitch(dpId);
+            // may also add destination tunnel ip.
+            if (i == tunnelStart) {
+                srcIp = (InetSocketAddress)sw.getInetAddress();
+                srcInet = srcIp.getAddress();
+                srcNetworkAddress = getIpAddressInInt(srcInet);
+                i += 1;
+                // add outer vlan 
+                // add flow for pushing to queue in case of tunnelStart > 2
+                
+            }
             // add code to add flows
+            i += 1;
+        }
+    }
+
+    private void addFlowsOnQueues (List<NodePortTuple> switches, short tcpPort) {
+        int size = switches.size();
+        int tunnelStart = getTunnelNode(switches, 1);
+        int tunnelEnd = 65536;
+        if (tunnelStart != -1) {
+            tunnelEnd = getTunnelNode(switches, size - 4);
+        }
+        int i = 0;
+        if (tunnelStart == -1) {
+            addFlowWithoutTunnel(switches, tcpPort);
+        } else {
+            addFlowWithTunnel(switches, tcpPort, tunnelStart, tunnelEnd);
         }
     }
 
