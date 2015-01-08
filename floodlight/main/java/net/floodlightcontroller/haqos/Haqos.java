@@ -30,6 +30,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.LinkedList;
 import java.util.ListIterator;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -84,6 +85,9 @@ import org.openflow.protocol.OFMessage;
 import org.openflow.protocol.OFType;
 import org.openflow.protocol.OFMatch;
 import org.openflow.protocol.OFPort;
+import org.openflow.protocol.OFPacketOut;
+import org.openflow.protocol.action.OFAction;
+import org.openflow.protocol.action.OFActionEnqueue;
 import org.openflow.protocol.statistics.OFStatistics;
 import org.openflow.protocol.statistics.OFStatisticsType;
 import org.openflow.protocol.OFStatisticsRequest;
@@ -108,6 +112,13 @@ public class Haqos
 
 
     public static final String MODULE_NAME = "haqos";
+
+    public static final int HAQOS_APP_ID = 30;
+    public static final short HAQOS_DEFAULT_IDLE_TIMEOUT = 30;
+    static {
+        AppCookie.registerApp(HAQOS_APP_ID, MODULE_NAME);
+    }
+
 
     //protected ILinkDiscoveryService linkDiscovery;
     //protected IThreadPoolService threadPool;
@@ -378,14 +389,44 @@ public class Haqos
         InetSocketAddress srcIp = (InetSocketAddress)sw.getInetAddress();
         InetAddress srcInet = srcIp.getAddress();
         int srcNetworkAddress = getIpAddressInInt(srcInet);
-        OFMatch match = new OFMatch();
-        match.setNetworkSource(srcNetworkAddress);
-        match.setTransportSource(tcpPort);
-        OFFlowMod fm = new OFFlowMod ();
-        fm.setMatch(match);
-        for (i = 2; i < size - 2; i++) {
+        // NodePortTuple List. at index 0: connection from VM.
+        // At Index 1 connection from bridge to out.
+        // At Index 2 connection from bridge to the 2nd switch.
+        // So at index 3, 5, 7 ... we have the out ports in all
+        // the links towards destination.
+        for (i = 3; i < size - 2; i += 2) {
             NodePortTuple node = switches.get(i);
             
+            dpId = node.getNodeId();
+            portId = node.getPortId();
+            sw = floodlightProvider.getSwitch(dpId);
+            OFMatch match = new OFMatch();
+            match.setNetworkSource(srcNetworkAddress);
+            match.setTransportSource(tcpPort);
+            OFFlowMod fm = new OFFlowMod ();
+            List<OFAction> actions = new LinkedList<OFAction>();
+            OFActionEnqueue action = new OFActionEnqueue ();
+            action.setPort(portId);
+            // We have portId and QueueId same. check the place where
+            // queues are created.
+            action.setQueueId(portId);
+            actions.add(action);
+            long cookie = AppCookie.makeCookie(HAQOS_APP_ID, 0);
+            fm.setActions(actions)
+              .setMatch(match)
+              .setHardTimeout((short) 0)
+              .setIdleTimeout((short) HAQOS_DEFAULT_IDLE_TIMEOUT)
+              .setCommand(OFFlowMod.OFPFC_ADD)
+              .setCookie(cookie)
+              .setBufferId(OFPacketOut.BUFFER_ID_NONE)
+              .setLengthU(OFFlowMod.MINIMUM_LENGTH +
+                          OFActionEnqueue.MINIMUM_LENGTH);
+            try {
+                sw.write(fm, null);
+                sw.flush();
+            } catch (IOException e) {
+                log.info (" Error adding flow to direct the flow to queue");
+            }
         }
     }
 
