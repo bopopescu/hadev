@@ -77,6 +77,7 @@ import net.floodlightcontroller.topology.NodePortTuple;
 import net.floodlightcontroller.threadpool.IThreadPoolService;
 import net.floodlightcontroller.linkdiscovery.ILinkDiscovery.LDUpdate;
 import net.floodlightcontroller.linkdiscovery.ILinkDiscoveryService;
+import net.floodlightcontroller.packet.IPv4;
 
 import org.openflow.protocol.OFFlowMod;
 import org.openflow.protocol.OFFlowRemoved;
@@ -295,6 +296,35 @@ public class Haqos
     }
 
 
+    private List<String> getRemoteAndLocalIp(String portName) {
+
+        List<String> ipStrings = new ArrayList<String>();
+        String[] command = {"python",
+              "/home/snathan/floodlight-master/src/main/java/net/floodlightcontroller/haqos/GetRemoteIp.py",
+              "--intName=" + portName};
+        try {
+            log.info(" before start ");
+            Process cmdProcess = new ProcessBuilder(command).start();
+            log.info(" after start ");
+            InputStream inputStream = cmdProcess.getInputStream();
+            InputStreamReader inputReader = new InputStreamReader(inputStream);
+            BufferedReader bufReader = new BufferedReader(inputReader);
+            String line;
+            int i = 0;
+            line = bufReader.readLine();
+            ipStrings.add(line);
+            line = bufReader.readLine();
+            ipStrings.add(line);
+            return ipStrings;
+        } catch (IOException e) {
+            log.info("io exception ");
+        }
+        return ipStrings;
+    }
+
+
+
+
     private void callOvsUsingProcess(String[] command, String srcPort) {
 
         try {
@@ -438,8 +468,14 @@ public class Haqos
         InetAddress srcInet;
         int srcNetworkAddress;
         int i = 0;
+        short inputPort=0;
+        int remoteIp=0;
+        int localIp=0;
         for (NodePortTuple node : switches) {
             if (i < tunnelStart || i >= tunnelEnd) {
+                if (i == (tunnelStart -1)) {
+                    inputPort = node.getPortId();
+                }
                 i += 1;
                 continue;
             }
@@ -448,18 +484,79 @@ public class Haqos
             IOFSwitch sw = floodlightProvider.getSwitch(dpId);
             // may also add destination tunnel ip.
             if (i == tunnelStart) {
-                srcIp = (InetSocketAddress)sw.getInetAddress();
-                srcInet = srcIp.getAddress();
-                srcNetworkAddress = getIpAddressInInt(srcInet);
-                i += 1;
-                // add outer vlan 
+                // get remote IP. The packet will be matched by the
+                // local and remote IP as src and dest nw address.
                 // add flow for pushing to queue in case of tunnelStart > 2
-                
+                ImmutablePort port = sw.getPort(portId);
+                String portName = port.getName();
+                List<String> ipStrings = getRemoteAndLocalIp(portName);
+                remoteIp = IPv4.toIPv4Address(ipStrings.get(0));
+                localIp = IPv4.toIPv4Address(ipStrings.get(1));
+                if (tunnelStart > 2) {
+                    OFMatch match = new OFMatch();
+                    match.setInputPort(inputPort);
+                    match.setTransportSource(tcpPort);
+                    OFFlowMod fm = new OFFlowMod ();
+                    List<OFAction> actions = new LinkedList<OFAction>();
+                    OFActionEnqueue action = new OFActionEnqueue ();
+                    action.setPort(portId);
+                    // We have portId and QueueId same. check the place where
+                    // queues are created.
+                    action.setQueueId(portId);
+                    actions.add(action);
+                    long cookie = AppCookie.makeCookie(HAQOS_APP_ID, 0);
+                    fm.setActions(actions)
+                      .setMatch(match)
+                      .setHardTimeout((short) 0)
+                      .setIdleTimeout((short) HAQOS_DEFAULT_IDLE_TIMEOUT)
+                      .setCommand(OFFlowMod.OFPFC_ADD)
+                      .setCookie(cookie)
+                      .setBufferId(OFPacketOut.BUFFER_ID_NONE)
+                      .setLengthU(OFFlowMod.MINIMUM_LENGTH +
+                          OFActionEnqueue.MINIMUM_LENGTH);
+                    try {
+                        sw.write(fm, null);
+                        sw.flush();
+                    } catch (IOException e) {
+                        log.info (" Error adding flow to direct the flow to queue");
+                    }
+                }
+                i += 1;
+                continue;
             }
-            // add code to add flows
+            OFMatch match = new OFMatch();
+            match.setNetworkSource(localIp);
+            match.setNetworkDestination(remoteIp);
+            //match.setTransportSource(tcpPort);
+            OFFlowMod fm = new OFFlowMod ();
+            List<OFAction> actions = new LinkedList<OFAction>();
+            OFActionEnqueue action = new OFActionEnqueue ();
+            action.setPort(portId);
+            // We have portId and QueueId same. check the place where
+            // queues are created.
+            action.setQueueId(portId);
+            actions.add(action);
+            long cookie = AppCookie.makeCookie(HAQOS_APP_ID, 0);
+            fm.setActions(actions)
+              .setMatch(match)
+              .setHardTimeout((short) 0)
+              .setIdleTimeout((short) HAQOS_DEFAULT_IDLE_TIMEOUT)
+              .setCommand(OFFlowMod.OFPFC_ADD)
+              .setCookie(cookie)
+              .setBufferId(OFPacketOut.BUFFER_ID_NONE)
+              .setLengthU(OFFlowMod.MINIMUM_LENGTH +
+                          OFActionEnqueue.MINIMUM_LENGTH);
+            try {
+                sw.write(fm, null);
+                sw.flush();
+            } catch (IOException e) {
+                log.info (" Error adding flow to direct the flow to queue");
+            }
             i += 1;
         }
     }
+
+
 
     private void addFlowsOnQueues (List<NodePortTuple> switches, short tcpPort) {
         int size = switches.size();
