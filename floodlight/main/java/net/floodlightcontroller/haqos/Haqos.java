@@ -278,6 +278,21 @@ public class Haqos
         }
     }
 
+    private void addTunnelFlowWithTos(String switchName, short tcpPort,
+        short inPort, short outPort, int dscpValue) {
+
+        String[] command = {"python",
+              "/home/snathan/floodlight-master/src/main/java/net/floodlightcontroller/haqos/AddTunnelFlow.py",
+              "--tunId=0x2", "--inPort=" + inPort, "--tcpPort=" + tcpPort,
+              "--outPort=" + outPort, "--dscpVal=" + dscpValue, "--brName=" + switchName};
+        try {
+            log.info(" before start ");
+            Process cmdProcess = new ProcessBuilder(command).start();
+            log.info(" after start ");
+        } catch (IOException e) {
+            log.info("io exception ");
+        }
+    }
 
 
     private boolean isTunnelPort(String[] command) {
@@ -495,38 +510,18 @@ public class Haqos
                 // add flow for pushing to queue in case of tunnelStart > 2
                 ImmutablePort port = sw.getPort(portId);
                 String portName = port.getName();
+                ImmutablePort internalPort = sw.getPort((short) 65534);
+                String switchName = port.getName();
                 List<String> ipStrings = getRemoteAndLocalIp(portName);
                 remoteIp = IPv4.toIPv4Address(ipStrings.get(0));
                 localIp = IPv4.toIPv4Address(ipStrings.get(1));
-                if (tunnelStart > 2) {
-                    OFMatch match = new OFMatch();
-                    match.setInputPort(inputPort);
-                    match.setTransportSource(tcpPort);
-                    OFFlowMod fm = new OFFlowMod ();
-                    List<OFAction> actions = new LinkedList<OFAction>();
-                    OFActionEnqueue action = new OFActionEnqueue ();
-                    action.setPort(portId);
-                    // We have portId and QueueId same. check the place where
-                    // queues are created.
-                    action.setQueueId(portId);
-                    actions.add(action);
-                    long cookie = AppCookie.makeCookie(HAQOS_APP_ID, 0);
-                    fm.setActions(actions)
-                      .setMatch(match)
-                      .setHardTimeout((short) 0)
-                      .setIdleTimeout((short) HAQOS_DEFAULT_IDLE_TIMEOUT)
-                      .setCommand(OFFlowMod.OFPFC_ADD)
-                      .setCookie(cookie)
-                      .setBufferId(OFPacketOut.BUFFER_ID_NONE)
-                      .setLengthU(OFFlowMod.MINIMUM_LENGTH +
-                          OFActionEnqueue.MINIMUM_LENGTH);
-                    try {
-                        sw.write(fm, null);
-                        sw.flush();
-                    } catch (IOException e) {
-                        log.info (" Error adding flow to direct the flow to queue");
-                    }
-                }
+                NodePortTuple prevNode = switches.get(i-1);
+                short inPort = prevNode.getPortId();
+                // Need to add flow to tunnel the packet, add DSCP bit on
+                // the outer header and then queue the packet.
+                // The OFAction does not currently have set_tunnel action
+                // and hence using ovs-ofctl command.
+                addTunnelFlowWithTos(switchName, tcpPort, portId, inPort, 32);
                 i += 1;
                 continue;
             }
@@ -563,9 +558,6 @@ public class Haqos
     }
 
 
-    private void createTunnelInterfaceWithToS (List<NodePortTuple> switches,
-                                              short tcpPort, int tunnelStart) {
-    }
 
     private void addFlowsOnQueues (List<NodePortTuple> switches, short tcpPort) {
         int size = switches.size();
@@ -578,10 +570,6 @@ public class Haqos
         if (tunnelStart == -1) {
             addFlowWithoutTunnel(switches, tcpPort);
         } else {
-            // Need to create new interface pointing to the same remote ip.
-            // This is done so that ToS field is added which won't be added
-            // when network is created.
-            createTunnelInterfaceWithToS (switches, tcpPort, tunnelStart);
             addFlowWithTunnel(switches, tcpPort, tunnelStart, tunnelEnd);
         }
     }
@@ -626,14 +614,14 @@ public class Haqos
                 NodePortTuple tuple = iter.next();
                 long switchId = tuple.getNodeId();
                 long useBandwidth = bandwidth;
+                short portId = tuple.getPortId();
                 i += 1;
-                if (switchId == srcId || switchId == dstId) {
+                if ((switchId == srcId && portNum == portId) || switchId == dstId) {
                     continue;
                 }
                 if ((i % 2) == 0) {
                     continue;
                 }
-                short portId = tuple.getPortId();
                 synchronized (tuple) {
                     if (portRouteMap.containsKey(portId)) {
                         useBandwidth = getUpdatedBandwidth(portId,
