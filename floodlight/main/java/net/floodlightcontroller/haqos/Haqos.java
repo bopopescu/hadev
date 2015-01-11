@@ -94,6 +94,7 @@ import org.openflow.protocol.statistics.OFStatistics;
 import org.openflow.protocol.statistics.OFStatisticsType;
 import org.openflow.protocol.OFStatisticsRequest;
 import org.openflow.protocol.statistics.OFQueueStatisticsRequest;
+import org.openflow.protocol.OFPhysicalPort.PortSpeed;
 import org.openflow.util.HexString;
 import org.openflow.util.U16;
 import org.slf4j.Logger;
@@ -265,6 +266,23 @@ public class Haqos
         return values;
     }
 
+    @Override
+    public boolean hasBandwidthOnPath(long srcId, long dstId, long bandwidth) {
+
+        Route route = routingEngine.getRoute(srcId, dstId, 0);
+            List<NodePortTuple> switches = route.getPath();
+        for (NodePortTuple node : switches) {
+            short portId = node.getPortId();
+            long dpId = node.getNodeId();
+            IOFSwitch sw = floodlightProvider.getSwitch(dpId);
+            ImmutablePort port = sw.getPort(portId);
+            long speedInBps = port.getCurrentPortSpeed().getSpeedBps();
+            if (speedInBps < bandwidth) {
+              return false;
+            }
+        }
+        return true;
+    }
 
 
     private void deleteQosUsingProcess(String[] command) {

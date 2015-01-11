@@ -28,5 +28,7 @@ public interface IHaqosService extends IFloodlightService {
     public void createQueuesOnPath(long srcId,
         String srcPort, long dstId, String dstPort, long bandwidth);
 
+    public boolean hasBandwidthOnPath(long srcId, long dstId, long bandwidth);
+
     public List <OFStatistics> getQueuesOnSwitch(long switchId);
 }
