@@ -277,12 +277,28 @@ public class Haqos
             IOFSwitch sw = floodlightProvider.getSwitch(dpId);
             ImmutablePort port = sw.getPort(portId);
             long speedInBps = port.getCurrentPortSpeed().getSpeedBps();
-            if (speedInBps < bandwidth) {
+            long availableBandwidth = speedInBps - getUsedBandwidth(portId);
+            if (availableBandwidth < bandwidth) {
               return false;
             }
         }
         return true;
     }
+
+
+    private long getUsedBandwidth (short portId) {
+        long usedBandwidth = 0;
+        if (portRouteMap.containsKey(portId)) {
+            List<RouteId> routeIds = portRouteMap.get(portId);
+            for (RouteId routeId : routeIds) {
+                if (bandwidthMap.containsKey(routeId)) {
+                    usedBandwidth += bandwidthMap.get(routeId);
+                }
+            }
+        }
+        return usedBandwidth;
+    }
+
 
 
     private void deleteQosUsingProcess(String[] command) {
