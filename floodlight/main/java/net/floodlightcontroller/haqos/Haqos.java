@@ -562,6 +562,7 @@ public class Haqos
             OFMatch match = new OFMatch();
             match.setNetworkSource(localIp);
             match.setNetworkDestination(remoteIp);
+            match.setNetworkTypeOfService((byte)32);
             //match.setTransportSource(tcpPort);
             OFFlowMod fm = new OFFlowMod ();
             List<OFAction> actions = new LinkedList<OFAction>();
