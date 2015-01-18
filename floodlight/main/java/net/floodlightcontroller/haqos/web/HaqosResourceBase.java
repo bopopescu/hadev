@@ -83,6 +83,8 @@ public class HaqosResourceBase extends ServerResource {
                 (IHaqosService)getContext().getAttributes().
                     get(IHaqosService.class.getCanonicalName());
 
+        log.info (" srcid   " +  srcId + " dstId " +  dstId + " srcPort " +  srcPort + " dstPort " + dstPort);
+
         haqos.createQueuesOnPath(srcId,
                                 srcPort,
                                 dstId,

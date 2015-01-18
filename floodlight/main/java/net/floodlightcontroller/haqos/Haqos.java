@@ -140,7 +140,7 @@ public class Haqos
 
     protected ConcurrentHashMap<RouteId, Long> bandwidthMap;
 
-    protected ConcurrentHashMap<Short /*Port number*/, List<RouteId> /*List of routes associated*/ > portRouteMap;
+    protected ConcurrentHashMap<String /*Port Name*/, List<RouteId> /*List of routes associated*/ > portRouteMap;
 
     @Override
     public void printTest() {
@@ -156,7 +156,8 @@ public class Haqos
             short dstPort = destPortMap.get(routeId).shortValue();
             Route newRoute = routingEngine.getRoute(routeId.getSrc(), srcPort,
                                     routeId.getDst(), dstPort, 0);
-            if (newRoute != route) {
+            if (newRoute.getId().getSrc() != route.getId().getSrc() &&
+                newRoute.getId().getDst() != route.getId().getDst()) {
                 /*Need to update the queues*/
                 List<NodePortTuple> newSwitches = newRoute.getPath();
                 HashSet<Long> dpIdSet = new HashSet<Long>();
@@ -184,18 +185,21 @@ public class Haqos
                     if (oldIdSet.contains(dpId)) {
                         continue;
                     }
+                    IOFSwitch sw = floodlightProvider.getSwitch(switchDpId);
+                    ImmutablePort port = sw.getPort(portId);
+                    String portName = port.getName();
                     synchronized (nodes) {
-                        if (portRouteMap.containsKey(portId)) {
-                             useBandwidth = getUpdatedBandwidth(portId,
+                        if (portRouteMap.containsKey(portName)) {
+                             useBandwidth = getUpdatedBandwidth(portName,
                                               newRoute.getId(), bandwidth);
                         } else {
                             List<RouteId> routes = new ArrayList<RouteId>();
                             routes.add(newRoute.getId());
-                            portRouteMap.put(portId, routes);
+                            portRouteMap.put(portName, routes);
                         }
-                        IOFSwitch sw = floodlightProvider.getSwitch(switchDpId);
-                        ImmutablePort port = sw.getPort(portId);
-                        String portName = port.getName();
+                        //IOFSwitch sw = floodlightProvider.getSwitch(switchDpId);
+                        //ImmutablePort port = sw.getPort(portId);
+                        //String portName = port.getName();
                         String qosName = "qos" + portId;
                         String queueName = "qu" + portId;
                         String[] command = {"python",
@@ -270,14 +274,18 @@ public class Haqos
     public boolean hasBandwidthOnPath(long srcId, long dstId, long bandwidth) {
 
         Route route = routingEngine.getRoute(srcId, dstId, 0);
-            List<NodePortTuple> switches = route.getPath();
+        List<NodePortTuple> switches = route.getPath();
         for (NodePortTuple node : switches) {
             short portId = node.getPortId();
             long dpId = node.getNodeId();
             IOFSwitch sw = floodlightProvider.getSwitch(dpId);
             ImmutablePort port = sw.getPort(portId);
             long speedInBps = port.getCurrentPortSpeed().getSpeedBps();
-            long availableBandwidth = speedInBps - getUsedBandwidth(portId);
+            if (speedInBps == 0) {
+                log.info("port has 0 speed, setting 1000");
+                speedInBps = 1000000;
+            }
+            long availableBandwidth = speedInBps - getUsedBandwidth(port.getName());
             if (availableBandwidth < bandwidth) {
               return false;
             }
@@ -286,10 +294,10 @@ public class Haqos
     }
 
 
-    private long getUsedBandwidth (short portId) {
+    private long getUsedBandwidth (String portName) {
         long usedBandwidth = 0;
-        if (portRouteMap.containsKey(portId)) {
-            List<RouteId> routeIds = portRouteMap.get(portId);
+        if (portRouteMap.containsKey(portName)) {
+            List<RouteId> routeIds = portRouteMap.get(portName);
             for (RouteId routeId : routeIds) {
                 if (bandwidthMap.containsKey(routeId)) {
                     usedBandwidth += bandwidthMap.get(routeId);
@@ -382,6 +390,9 @@ public class Haqos
 
         try {
             log.info(" before start ");
+            for (String cmd : command) {
+                log.info(cmd);
+            }
             Process cmdProcess = new ProcessBuilder(command).start();
             log.info(" after start ");
             InputStream inputStream = cmdProcess.getInputStream();
@@ -394,6 +405,7 @@ public class Haqos
                 if (line == "") {
                     continue;
                 }
+                log.info(line);
                 if (i == 0) {
                     qosMap.put(srcPort, line);
                 } else {
@@ -408,11 +420,11 @@ public class Haqos
         }
     }
 
-    private long getUpdatedBandwidth(short portId, RouteId addRoute, long bandwidth)
+    private long getUpdatedBandwidth(String portName, RouteId addRoute, long bandwidth)
     {
         long updatedBandwidth = bandwidth;
-        synchronized (portRouteMap.get(portId)) {
-            List<RouteId> routesOnPort = portRouteMap.get(portId);
+        synchronized (portRouteMap.get(portName)) {
+            List<RouteId> routesOnPort = portRouteMap.get(portName);
             ListIterator<RouteId> iter = routesOnPort.listIterator();
             boolean alreadyAdded = false;
             while (iter.hasNext()) {
@@ -425,7 +437,7 @@ public class Haqos
             }
             if (alreadyAdded == false) {
                 routesOnPort.add(addRoute);
-                portRouteMap.put(portId, routesOnPort);
+                portRouteMap.put(portName, routesOnPort);
             }
         }
         return updatedBandwidth;
@@ -639,7 +651,9 @@ public class Haqos
             List<NodePortTuple> switches = route.getPath();
             ListIterator<NodePortTuple> iter = switches.listIterator();
             int i = 0;
+            log.info("else of create queue");
             if (switches != null && switches.isEmpty() == false) {
+                log.info("switches are not null");
                 routeMap.put(route.getId(), route);
                 sourcePortMap.put(route.getId(), new Short(portNum));
                 destPortMap.put(route.getId(), new Short(dstPortNum));
@@ -657,18 +671,18 @@ public class Haqos
                 if ((i % 2) == 0) {
                     continue;
                 }
+                sw = floodlightProvider.getSwitch(switchId);
+                port = sw.getPort(portId);
+                String portName = port.getName();
                 synchronized (tuple) {
-                    if (portRouteMap.containsKey(portId)) {
-                        useBandwidth = getUpdatedBandwidth(portId,
+                    if (portRouteMap.containsKey(portName)) {
+                        useBandwidth = getUpdatedBandwidth(portName,
                                           route.getId(), bandwidth);
                     } else {
                         List<RouteId> routes = new ArrayList<RouteId>();
                         routes.add(route.getId());
-                        portRouteMap.put(portId, routes);
+                        portRouteMap.put(portName, routes);
                     }
-                    sw = floodlightProvider.getSwitch(switchId);
-                    port = sw.getPort(portId);
-                    String portName = port.getName();
                     String qosName = "qos" + portId;
                     String queueName = "qu" + portId;
                     String[] command = {"python",
@@ -736,7 +750,7 @@ public class Haqos
         sourcePortMap = new ConcurrentHashMap<RouteId, Short> ();
         destPortMap = new ConcurrentHashMap<RouteId, Short> ();
         bandwidthMap = new ConcurrentHashMap<RouteId, Long> ();
-        portRouteMap = new ConcurrentHashMap<Short, List<RouteId>> ();
+        portRouteMap = new ConcurrentHashMap<String, List<RouteId>> ();
         log.info("at init of Haqos");
 
     }
