@@ -19,51 +19,58 @@ class MyTopo( Topo ):
         # Initialize topology
         Topo.__init__( self )
 
-        # Build 2 Core switches
-        core = [];
-        i = 0;
-        while (i < 1):
-            core.append(self.addSwitch('core-%s' % (i+1)));
-            i += 1;
-
-        # Build 4 Aggr switches
-        aggr = [];
-        i = 0;
-        while (i < 2):
-            aggr.append(self.addSwitch('aggr-%s' % (i+1)));
-            i += 1;
-
-        # Build 8 Edge switches
-        edge = [];
-        i = 0;
-        while (i < 4):
-            edge.append(self.addSwitch('edge-%s' % (i+1)));
-            i += 1;
 
         # Build 16 hosts 
         hosts = [];
         i = 0;
-        while (i < 8):
-            hosts.append(self.addHost('host-%s' % (i+1)));
+        while (i < 16):
+            hosts.append(self.addHost('h%s' % (i+1)));
             i += 1;
+
+        # Build 2 Core switches
+        core = [];
+        j = 0;
+        while (j < 2):
+            core.append(self.addSwitch('s%s' % (i+1)));
+            i += 1;
+            j += 1;
+
+        # Build 4 Aggr switches
+        aggr = [];
+        j = 0;
+        while (j < 4):
+            aggr.append(self.addSwitch('s%s' % (i+1)));
+            i += 1;
+            j += 1;
+
+        # Build 8 Edge switches
+        edge = [];
+        j = 0;
+        while (j < 8):
+            edge.append(self.addSwitch('s%s' % (i+1)));
+            i += 1;
+            j += 1;
+
 
         # Link aggr with core 
         i = 0;
-        while (i < 2):
-            j = i / 2;
-            self.addLink (aggr[i], core[j]);
+        while (i < 4):
+            j = 0;
+            while j < 2:
+                self.addLink (aggr[i], core[j]);
+                j += 1;
             i += 1;
 
         # Link edge with aggr
         i = 0;
-        while (i < 4):
+        while (i < 8):
             j = i / 2;
             self.addLink (edge[i], aggr[j]);
             i += 1;
 
         # Link host with edge
         i = 0;
-        while (i < 8):
+        while (i < 16):
             j = i / 2;
             self.addLink (hosts[i], edge[j]);
             i += 1;
