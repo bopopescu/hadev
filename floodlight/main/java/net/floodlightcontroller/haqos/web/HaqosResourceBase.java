@@ -77,7 +77,8 @@ public class HaqosResourceBase extends ServerResource {
         String srcPort,
         long dstId,
         String dstPort,
-        long bandwidth) {
+        long bandwidth,
+        short tcpPort) {
 
         IHaqosService haqos =
                 (IHaqosService)getContext().getAttributes().
@@ -89,7 +90,8 @@ public class HaqosResourceBase extends ServerResource {
                                 srcPort,
                                 dstId,
                                 dstPort,
-                                bandwidth);
+                                bandwidth,
+                                tcpPort);
         return true;
     }
 

@@ -25,8 +25,8 @@ import org.openflow.protocol.statistics.OFStatistics;
 public interface IHaqosService extends IFloodlightService {
 
     public void printTest();
-    public void createQueuesOnPath(long srcId,
-        String srcPort, long dstId, String dstPort, long bandwidth);
+    public void createQueuesOnPath(long srcId, String srcPort,
+        long dstId, String dstPort, long bandwidth, short tcpPort);
 
     public boolean hasBandwidthOnPath(long srcId, long dstId, long bandwidth);
 

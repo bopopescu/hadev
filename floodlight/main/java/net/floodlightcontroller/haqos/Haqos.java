@@ -156,6 +156,15 @@ public class Haqos
             short dstPort = destPortMap.get(routeId).shortValue();
             Route newRoute = routingEngine.getRoute(routeId.getSrc(), srcPort,
                                     routeId.getDst(), dstPort, 0);
+            if (newRoute == null && route != null) {
+                List<NodePortTuple> oldSwitches = route.getPath();
+                for (NodePortTuple nodes : oldSwitches) {
+                    Long switchDpId = new Long(nodes.getNodeId());
+                    updateQueueOnPort(switchDpId.longValue(), nodes.getPortId(),
+                            bandwidthMap.get(routeId).longValue());
+                }
+                continue;
+            }
             if (newRoute.getId().getSrc() != route.getId().getSrc() &&
                 newRoute.getId().getDst() != route.getId().getDst()) {
                 /*Need to update the queues*/
@@ -231,12 +240,14 @@ public class Haqos
         deleteQosUsingProcess(command);
 
         List<String> queueNames = queueMap.get(portName);
-        for (String queueName : queueNames) {
+        if (queueNames != null) {
+            for (String queueName : queueNames) {
 
-            String [] cmd = {"python",
-                "/home/snathan/floodlight-master/src/main/java/net/floodlightcontroller/haqos/DeleteQueue.py",
-                "--queueName=" + queueName};
-            deleteQosUsingProcess(cmd);
+                String [] cmd = {"python",
+                  "/home/snathan/floodlight-master/src/main/java/net/floodlightcontroller/haqos/DeleteQueue.py",
+                  "--queueName=" + queueName};
+                deleteQosUsingProcess(cmd);
+            }
         }
         qosMap.remove(portName);
         queueMap.remove(portName);
@@ -454,15 +465,16 @@ public class Haqos
             ImmutablePort port = sw.getPort(portId);
             String portName = port.getName();
             String[] command = {"python",
-              "/home/snathan/floodlight-master/src/main/java/net/floodlightcontroller/haqos/CreateQueues.py",
+              "/home/snathan/floodlight-master/src/main/java/net/floodlightcontroller/haqos/GetInterfaceType.py",
               "--intName=" + portName};
             if (isTunnelPort(command)) {
                 log.info("has tunnel port");
                 return i;
             } else {
-                log.info("not tunnel port");
+                log.info("not tunnel port " + dpId);
             }
         }
+        log.info("before returning -1");
         return -1;
     }
 
@@ -483,6 +495,7 @@ public class Haqos
         short portId = start.getPortId();
         IOFSwitch sw = floodlightProvider.getSwitch(dpId);
 
+        log.info("at add flow without tunnel ");
         InetSocketAddress srcIp = (InetSocketAddress)sw.getInetAddress();
         InetAddress srcInet = srcIp.getAddress();
         int srcNetworkAddress = getIpAddressInInt(srcInet);
@@ -493,13 +506,25 @@ public class Haqos
         // the links towards destination.
         for (i = 3; i < size - 2; i += 2) {
             NodePortTuple node = switches.get(i);
-            
+            NodePortTuple prevNode = switches.get(i-1);
+            short inputPort = prevNode.getPortId();
+
             dpId = node.getNodeId();
             portId = node.getPortId();
             sw = floodlightProvider.getSwitch(dpId);
             OFMatch match = new OFMatch();
+            log.info("input port " + inputPort);
+            log.info("tcp port " + tcpPort);
+            match.setWildcards(OFMatch.OFPFW_ALL & ~OFMatch.OFPFW_NW_SRC_MASK &
+                ~OFMatch.OFPFW_TP_SRC & ~OFMatch.OFPFW_IN_PORT &
+                ~OFMatch.OFPFW_NW_PROTO & ~OFMatch.OFPFW_DL_TYPE);
+            match.setInputPort(inputPort);
             match.setNetworkSource(srcNetworkAddress);
+            match.setDataLayerType((short) 0x0800);
+            match.setNetworkProtocol((byte) 6);
             match.setTransportSource(tcpPort);
+            log.info("after setting tcp port " + match.getTransportSource());
+            log.info("wildcard " + match.getWildcards());
             OFFlowMod fm = new OFFlowMod ();
             List<OFAction> actions = new LinkedList<OFAction>();
             OFActionEnqueue action = new OFActionEnqueue ();
@@ -509,12 +534,11 @@ public class Haqos
             action.setQueueId(portId);
             actions.add(action);
             long cookie = AppCookie.makeCookie(HAQOS_APP_ID, 0);
-            fm.setActions(actions)
-              .setMatch(match)
-              .setHardTimeout((short) 0)
-              .setIdleTimeout((short) HAQOS_DEFAULT_IDLE_TIMEOUT)
+            fm.setMatch(match)
+              .setActions(actions)
               .setCommand(OFFlowMod.OFPFC_ADD)
               .setCookie(cookie)
+              .setPriority(Short.MAX_VALUE)
               .setBufferId(OFPacketOut.BUFFER_ID_NONE)
               .setLengthU(OFFlowMod.MINIMUM_LENGTH +
                           OFActionEnqueue.MINIMUM_LENGTH);
@@ -572,6 +596,8 @@ public class Haqos
                 continue;
             }
             OFMatch match = new OFMatch();
+            match.setWildcards(OFMatch.OFPFW_ALL & ~OFMatch.OFPFW_NW_SRC_MASK &
+                ~OFMatch.OFPFW_NW_DST_MASK & ~OFMatch.OFPFW_NW_TOS);
             match.setNetworkSource(localIp);
             match.setNetworkDestination(remoteIp);
             match.setNetworkTypeOfService((byte)32);
@@ -609,12 +635,14 @@ public class Haqos
     private void addFlowsOnQueues (List<NodePortTuple> switches, short tcpPort) {
         int size = switches.size();
         int tunnelStart = getTunnelNode(switches, 1);
+        log.info(" tunnel start " + tunnelStart);
         int tunnelEnd = 65536;
         if (tunnelStart != -1) {
             tunnelEnd = getTunnelNode(switches, size - 4);
         }
         int i = 0;
         if (tunnelStart == -1) {
+            log.info(" calling without tunnel ");
             addFlowWithoutTunnel(switches, tcpPort);
         } else {
             addFlowWithTunnel(switches, tcpPort, tunnelStart, tunnelEnd);
@@ -623,8 +651,8 @@ public class Haqos
 
 
     @Override
-    public void createQueuesOnPath(long srcId,
-        String srcPort, long dstId, String dstPort, long bandwidth) {
+    public void createQueuesOnPath(long srcId, String srcPort,
+        long dstId, String dstPort, long bandwidth, short tcpPort) {
         /* 
          * Create egress queue based on srcPort if srcId = dstId
          */
@@ -692,6 +720,7 @@ public class Haqos
                     callOvsUsingProcess(command, portName);
                 }
             }
+            addFlowsOnQueues (switches, tcpPort);
 
         }
     }

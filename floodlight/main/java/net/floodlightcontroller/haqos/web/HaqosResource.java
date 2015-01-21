@@ -63,9 +63,11 @@ public class HaqosResource extends HaqosResourceBase {
         String dstPort = (String) getRequestAttributes().get("dst-port");
         long bandwidth =
             Long.parseLong((String) getRequestAttributes().get("bandwidth"));
+        short tcpPort =
+            Short.parseShort((String) getRequestAttributes().get("tcp"));
 
         boolean result =
-            createQueuesOnPath (srcId, srcPort, dstId, dstPort, bandwidth);
+            createQueuesOnPath (srcId, srcPort, dstId, dstPort, bandwidth, tcpPort);
 
         return "{\"status\":\"ok\"}";
     }
