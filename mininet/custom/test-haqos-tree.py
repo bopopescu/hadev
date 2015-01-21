@@ -10,37 +10,48 @@ topology enables one to pass in '--topo=mytopo' from the command line.
 
 from mininet.topo import Topo
 from mininet.net import Mininet
+from mininet.node import CPULimitedHost
+from mininet.link import TCLink
+from mininet.node import RemoteController
+from mininet.cli import CLI
+from mininet.log import setLogLevel, info
 
 
-
-class MyTopo( Topo ):
-    "Simple topology example."
-
-    def __init__( self ):
-        "Create custom topo."
-        Topo.__init__(self);
-        # Add hosts and switches
-        host1 = self.addHost( 'h1' )
-        host2 = self.addHost( 'h2' )
-        #host3 = self.addHost( 'h3' )
-        #host4 = self.addHost( 'h4' )
-        edgeSwitch1 = self.addSwitch( 's3' )
-        edgeSwitch2 = self.addSwitch( 's4' )
-        #edgeSwitch3 = self.addSwitch( 'e3' )
-        #edgeSwitch4 = self.addSwitch( 'e4' )
-        aggrSwitch1 = self.addSwitch( 's5' )
-        aggrSwitch2 = self.addSwitch( 's6' )
-        coreSwitch = self.addSwitch( 's7' )
-
-        # Add links
-        self.addLink( host1, edgeSwitch1 )
-        self.addLink( edgeSwitch1, aggrSwitch1 )
-        self.addLink( aggrSwitch1, coreSwitch )
-        self.addLink( coreSwitch, aggrSwitch2 )
-        self.addLink( aggrSwitch2, edgeSwitch2 )
-        self.addLink( edgeSwitch2, host2 )
-        #self.addLink( host3, edgeSwitch3 )
-        #self.addLink( edgeSwitch3, aggrSwitch1 )
+def createTreeTopo():
 
 
-topos = { 'mytopo': ( lambda: MyTopo() ) }
+    net = Mininet( controller=RemoteController)
+
+    info( '*** Adding controller\n' )
+    net.addController( 'c0', controller=RemoteController,ip="127.0.0.1",port=6633 )
+    # Add hosts and switches
+    host1 = net.addHost( 'h1' )
+    host2 = net.addHost( 'h2' )
+
+    edgeSwitch1 = net.addSwitch( 's3' )
+    edgeSwitch2 = net.addSwitch( 's4' )
+    aggrSwitch1 = net.addSwitch( 's5' )
+    aggrSwitch2 = net.addSwitch( 's6' )
+    coreSwitch = net.addSwitch( 's7' )
+
+    # Add links
+    net.addLink( host1, edgeSwitch1 )
+    net.addLink( edgeSwitch1, aggrSwitch1 )
+    net.addLink( aggrSwitch1, coreSwitch )
+    net.addLink( coreSwitch, aggrSwitch2 )
+    net.addLink( aggrSwitch2, edgeSwitch2 )
+    net.addLink( edgeSwitch2, host2 )
+
+
+    info( '*** Starting network\n')
+    net.start()
+
+    info( '*** Running CLI\n' )
+    CLI( net )
+
+    info( '*** Stopping network' )
+    net.stop()
+
+if __name__ == '__main__':
+    setLogLevel( 'info' )
+    createTreeTopo()

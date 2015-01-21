@@ -9,30 +9,51 @@ topology enables one to pass in '--topo=mytopo' from the command line.
 """
 
 from mininet.topo import Topo
+from mininet.net import Mininet
+from mininet.node import CPULimitedHost
+from mininet.link import TCLink
+from mininet.node import RemoteController
+from mininet.cli import CLI
+from mininet.log import setLogLevel, info
 
-class MyTopo( Topo ):
+def createTopo(  ):
     "Simple topology example."
 
-    def __init__( self ):
-        "Create custom topo."
 
-        # Initialize topology
-        Topo.__init__( self )
+    net = Mininet( controller=RemoteController)
 
-        # Add hosts and switches
-        leftHost = self.addHost( 'h1' )
-        rightHost = self.addHost( 'h2' )
-        leftSwitch = self.addSwitch( 's3' )
-        rightSwitch = self.addSwitch( 's4' )
-        centerSwitchl = self.addSwitch( 's5' )
-        centerSwitchr = self.addSwitch( 's6' )
+    info( '*** Adding controller\n' )
+    net.addController( 'c0', controller=RemoteController,ip="127.0.0.1",port=6633 )
 
-        # Add links
-        self.addLink( leftHost, leftSwitch )
-        self.addLink( leftSwitch, centerSwitchl )
-        self.addLink( centerSwitchl, centerSwitchr )
-        self.addLink( centerSwitchr, rightSwitch )
-        self.addLink( rightSwitch, rightHost )
+    # Add hosts and switches
+    leftHost = net.addHost( 'h1' )
+    rightHost = net.addHost( 'h2' )
+    leftSwitch = net.addSwitch( 's3' )
+    rightSwitch = net.addSwitch( 's4' )
+    centerSwitchl = net.addSwitch( 's5' )
+    centerSwitchr = net.addSwitch( 's6' )
+
+    # Add links
+    net.addLink( leftHost, leftSwitch )
+    net.addLink( leftSwitch, centerSwitchl )
+    net.addLink( centerSwitchl, centerSwitchr )
+    net.addLink( centerSwitchr, rightSwitch)
+
+    linkOpts = {'bw':10};
+    net.addLink( rightSwitch, rightHost, cls=TCLink, **linkOpts)
 
 
-topos = { 'mytopo': ( lambda: MyTopo() ) }
+    info( '*** Starting network\n')
+    net.start()
+
+    info( '*** Running CLI\n' )
+    CLI( net )
+
+    info( '*** Stopping network' )
+    net.stop()
+
+if __name__ == '__main__':
+    setLogLevel( 'info' )
+    createTopo()
+
+
