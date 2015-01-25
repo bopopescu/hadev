@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.SocketAddress;
 import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -132,7 +133,11 @@ public class Haqos
 
     protected ConcurrentHashMap<String /*PortName*/, String /*qosId*/ > qosMap;
 
-    protected ConcurrentHashMap<String /*PortName*/, List<String> /*List of queueId*/ > queueMap;
+    protected ConcurrentHashMap<String /*PortName*/,
+              List<String> /*List of queueId*/ > queueMap;
+
+    protected ConcurrentHashMap<String /*PortName*/,
+              Long /*total port reservation*/ > portBandwidth;
 
     protected ConcurrentHashMap<RouteId, Route> routeMap;
     protected ConcurrentHashMap<RouteId, Short> sourcePortMap;
@@ -140,7 +145,11 @@ public class Haqos
 
     protected ConcurrentHashMap<RouteId, Long> bandwidthMap;
 
-    protected ConcurrentHashMap<String /*Port Name*/, List<RouteId> /*List of routes associated*/ > portRouteMap;
+    protected ConcurrentHashMap<String /*Port Name*/,
+              List<RouteId> /*List of routes associated*/ > portRouteMap;
+
+    protected ConcurrentHashMap<NodePortTuple /*Port Id and switch id*/,
+              String /*portName*/ > portNameMap;
 
     @Override
     public void printTest() {
@@ -160,8 +169,10 @@ public class Haqos
                 List<NodePortTuple> oldSwitches = route.getPath();
                 for (NodePortTuple nodes : oldSwitches) {
                     Long switchDpId = new Long(nodes.getNodeId());
-                    updateQueueOnPort(switchDpId.longValue(), nodes.getPortId(),
-                            bandwidthMap.get(routeId).longValue());
+                    long currentBandwidth = portBandwidth.get(nodes.getPortId());
+                    long updatedBandwidth = currentBandwidth -
+                            bandwidthMap.get(routeId).longValue();
+                    updateQueueOnPort(nodes, updatedBandwidth);
                 }
                 continue;
             }
@@ -181,8 +192,10 @@ public class Haqos
                     Long switchDpId = new Long(nodes.getNodeId());
                     oldIdSet.add(switchDpId);
                     if (dpIdSet.contains(switchDpId) == false) {
-                        updateQueueOnPort(switchDpId.longValue(), nodes.getPortId(),
-                            bandwidthMap.get(routeId).longValue());
+                        long currentBandwidth = portBandwidth.get(nodes.getPortId());
+                        long updatedBandwidth = currentBandwidth -
+                            bandwidthMap.get(routeId).longValue();
+                        updateQueueOnPort(nodes, updatedBandwidth);
                     }
                 }
                 long useBandwidth = bandwidthMap.get(routeId).longValue();
@@ -197,6 +210,7 @@ public class Haqos
                     IOFSwitch sw = floodlightProvider.getSwitch(switchDpId);
                     ImmutablePort port = sw.getPort(portId);
                     String portName = port.getName();
+                    portNameMap.put(nodes, portName);
                     synchronized (nodes) {
                         if (portRouteMap.containsKey(portName)) {
                              useBandwidth = getUpdatedBandwidth(portName,
@@ -206,6 +220,7 @@ public class Haqos
                             routes.add(newRoute.getId());
                             portRouteMap.put(portName, routes);
                         }
+                        portBandwidth.put(portName, useBandwidth);
                         //IOFSwitch sw = floodlightProvider.getSwitch(switchDpId);
                         //ImmutablePort port = sw.getPort(portId);
                         //String portName = port.getName();
@@ -227,30 +242,45 @@ public class Haqos
     }
 
 
-    private void updateQueueOnPort (long switchId, short portId, long bandwidth) {
+    private void updateQueueOnPort (NodePortTuple node, long bandwidth) {
 
-        IOFSwitch sw = floodlightProvider.getSwitch(switchId);
-        ImmutablePort port = sw.getPort(portId);
-        String portName = port.getName();
+        short portId = node.getPortId(); 
+        String portName = portNameMap.get(node);
         String qosName = qosMap.get(portName);
         String[] command = {"python",
             "/home/snathan/floodlight-master/src/main/java/net/floodlightcontroller/haqos/DeleteQos.py",
             "--qosName=" + qosName, "--portName=" + portName};
 
-        deleteQosUsingProcess(command);
+        synchronized (node) {
+            deleteQosUsingProcess(command);
 
-        List<String> queueNames = queueMap.get(portName);
-        if (queueNames != null) {
-            for (String queueName : queueNames) {
+            List<String> queueNames = queueMap.get(portName);
+            if (queueNames != null) {
+                for (String queueName : queueNames) {
 
-                String [] cmd = {"python",
-                  "/home/snathan/floodlight-master/src/main/java/net/floodlightcontroller/haqos/DeleteQueue.py",
-                  "--queueName=" + queueName};
-                deleteQosUsingProcess(cmd);
+                    String [] cmd = {"python",
+                      "/home/snathan/floodlight-master/src/main/java/net/floodlightcontroller/haqos/DeleteQueue.py",
+                      "--queueName=" + queueName};
+                    deleteQosUsingProcess(cmd);
+                }
+            }
+            qosMap.remove(portName);
+            queueMap.remove(portName);
+            portBandwidth.remove(portName);
+        }
+        synchronized (node) {
+            if (bandwidth > 0) {
+                portBandwidth.put(portName, bandwidth);
+                qosName = "qos" + portId;
+                String queueName = "qu" + portId;
+                portBandwidth.put(portName, bandwidth);
+                String[] addCmd = {"python",
+                      "/home/snathan/floodlight-master/src/main/java/net/floodlightcontroller/haqos/CreateQueues.py",
+                      "--qName=" + queueName, "--srcPort=" + portName, "--qosName=" + qosName, "--qNum=" + portId,
+                      "--bandwidth=" + bandwidth};
+                callOvsUsingProcess(addCmd, portName);
             }
         }
-        qosMap.remove(portName);
-        queueMap.remove(portName);
     }
 
 
@@ -487,7 +517,7 @@ public class Haqos
 
 
     private void addFlowWithoutTunnel (List<NodePortTuple> switches,
-                                        short tcpPort) {
+                                        short tcpPort, String srcIp) {
         int i = 0;
         int size = switches.size();
         NodePortTuple start = switches.get(0);
@@ -496,15 +526,15 @@ public class Haqos
         IOFSwitch sw = floodlightProvider.getSwitch(dpId);
 
         log.info("at add flow without tunnel ");
-        InetSocketAddress srcIp = (InetSocketAddress)sw.getInetAddress();
-        InetAddress srcInet = srcIp.getAddress();
-        int srcNetworkAddress = getIpAddressInInt(srcInet);
+        //InetSocketAddress srcIp = (InetSocketAddress)sw.getInetAddress();
+        //InetAddress srcInet = srcIp.getAddress();
+        //int srcNetworkAddress = getIpAddressInInt(srcInet);
         // NodePortTuple List. at index 0: connection from VM.
         // At Index 1 connection from bridge to out.
         // At Index 2 connection from bridge to the 2nd switch.
         // So at index 3, 5, 7 ... we have the out ports in all
         // the links towards destination.
-        for (i = 3; i < size - 2; i += 2) {
+        for (i = 1; i < size; i += 2) {
             NodePortTuple node = switches.get(i);
             NodePortTuple prevNode = switches.get(i-1);
             short inputPort = prevNode.getPortId();
@@ -515,14 +545,32 @@ public class Haqos
             OFMatch match = new OFMatch();
             log.info("input port " + inputPort);
             log.info("tcp port " + tcpPort);
-            match.setWildcards(OFMatch.OFPFW_ALL & ~OFMatch.OFPFW_NW_SRC_MASK &
-                ~OFMatch.OFPFW_TP_SRC & ~OFMatch.OFPFW_IN_PORT &
-                ~OFMatch.OFPFW_NW_PROTO & ~OFMatch.OFPFW_DL_TYPE);
+            int wildCards = OFMatch.OFPFW_ALL & /*~OFMatch.OFPFW_NW_SRC_MASK &*/
+                /*~OFMatch.OFPFW_TP_SRC &*/ ~OFMatch.OFPFW_IN_PORT &
+                ~OFMatch.OFPFW_NW_PROTO & ~OFMatch.OFPFW_DL_TYPE;
+            if (tcpPort != -1) {
+                wildCards = wildCards & ~OFMatch.OFPFW_TP_SRC;
+            }
+            if (srcIp.equals("None") == false) {
+                wildCards = wildCards & ~OFMatch.OFPFW_NW_SRC_MASK;
+            }
+            match.setWildcards(wildCards);
             match.setInputPort(inputPort);
-            match.setNetworkSource(srcNetworkAddress);
             match.setDataLayerType((short) 0x0800);
             match.setNetworkProtocol((byte) 6);
-            match.setTransportSource(tcpPort);
+            if (tcpPort != -1) {
+                match.setTransportSource(tcpPort);
+            }
+            log.info(" src Ip " + srcIp);
+            if (srcIp.equals("None") == false) {
+                InetAddress srcIpInet = null;
+                try {
+                    srcIpInet = InetAddress.getByName(srcIp);
+                } catch (UnknownHostException e) {
+                    log.info("unknown host");
+                }
+                match.setNetworkSource(getIpAddressInInt(srcIpInet));
+            }
             log.info("after setting tcp port " + match.getTransportSource());
             log.info("wildcard " + match.getWildcards());
             OFFlowMod fm = new OFFlowMod ();
@@ -632,7 +680,8 @@ public class Haqos
 
 
 
-    private void addFlowsOnQueues (List<NodePortTuple> switches, short tcpPort) {
+    private void addFlowsOnQueues (List<NodePortTuple> switches,
+        short tcpPort, String srcIp) {
         int size = switches.size();
         int tunnelStart = getTunnelNode(switches, 1);
         log.info(" tunnel start " + tunnelStart);
@@ -643,7 +692,7 @@ public class Haqos
         int i = 0;
         if (tunnelStart == -1) {
             log.info(" calling without tunnel ");
-            addFlowWithoutTunnel(switches, tcpPort);
+            addFlowWithoutTunnel(switches, tcpPort, srcIp);
         } else {
             addFlowWithTunnel(switches, tcpPort, tunnelStart, tunnelEnd);
         }
@@ -652,7 +701,8 @@ public class Haqos
 
     @Override
     public void createQueuesOnPath(long srcId, String srcPort,
-        long dstId, String dstPort, long bandwidth, short tcpPort) {
+        long dstId, String dstPort, long bandwidth,
+        short tcpPort, String srcIp) {
         /* 
          * Create egress queue based on srcPort if srcId = dstId
          */
@@ -693,15 +743,16 @@ public class Haqos
                 long useBandwidth = bandwidth;
                 short portId = tuple.getPortId();
                 i += 1;
-                if ((switchId == srcId && portNum == portId) || switchId == dstId) {
+                /*if ((switchId == srcId && portNum == portId) || switchId == dstId) {
                     continue;
-                }
+                }*/
                 if ((i % 2) == 0) {
                     continue;
                 }
                 sw = floodlightProvider.getSwitch(switchId);
                 port = sw.getPort(portId);
                 String portName = port.getName();
+                portNameMap.put (tuple, portName); 
                 synchronized (tuple) {
                     if (portRouteMap.containsKey(portName)) {
                         useBandwidth = getUpdatedBandwidth(portName,
@@ -711,6 +762,7 @@ public class Haqos
                         routes.add(route.getId());
                         portRouteMap.put(portName, routes);
                     }
+                    portBandwidth.put(portName, useBandwidth);
                     String qosName = "qos" + portId;
                     String queueName = "qu" + portId;
                     String[] command = {"python",
@@ -720,7 +772,7 @@ public class Haqos
                     callOvsUsingProcess(command, portName);
                 }
             }
-            addFlowsOnQueues (switches, tcpPort);
+            addFlowsOnQueues (switches, tcpPort, srcIp);
 
         }
     }
@@ -780,6 +832,8 @@ public class Haqos
         destPortMap = new ConcurrentHashMap<RouteId, Short> ();
         bandwidthMap = new ConcurrentHashMap<RouteId, Long> ();
         portRouteMap = new ConcurrentHashMap<String, List<RouteId>> ();
+        portBandwidth = new ConcurrentHashMap<String, Long> ();
+        portNameMap = new ConcurrentHashMap<NodePortTuple, String> ();
         log.info("at init of Haqos");
 
     }

@@ -29,7 +29,7 @@ parser.add_option("-o", "--qosName", dest="qosName",
 
 if options.queueName != "NoName" or options.qosName != "NoQosName":
 
-    command = 'sudo ovs-vsctl -- set port %s qos=@%s -- --id=@%s create qos type=linux-htb other-config:min-rate=%s queues:%s=@%s -- --id=@%s create Queue other-config:min-rate=%s' % (options.srcPort, options.qosName, options.qosName, options.bandwidth, options.queueNum, options.queueName, options.queueName, options.bandwidth);
+    command = 'sudo ovs-vsctl -- set port %s qos=@%s -- --id=@%s create qos type=linux-htb other-config:min-rate=%s queues:%s=@%s -- --id=@%s create Queue other-config:min-rate=%s other-config:max-rate=%s' % (options.srcPort, options.qosName, options.qosName, options.bandwidth, options.queueNum, options.queueName, options.queueName, options.bandwidth, options.bandwidth);
 
     result = os.popen(command);
 
