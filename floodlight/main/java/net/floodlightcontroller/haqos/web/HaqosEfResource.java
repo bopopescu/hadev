@@ -21,6 +21,10 @@ import java.util.HashMap;
 import java.util.Map;
 
 import net.floodlightcontroller.packet.IPv4;
+import net.floodlightcontroller.core.IFloodlightProviderService;
+import net.floodlightcontroller.core.IOFSwitch;
+import net.floodlightcontroller.core.annotations.LogMessageDoc;
+import net.floodlightcontroller.haqos.IHaqosService;
 
 import org.openflow.util.HexString;
 
@@ -37,41 +41,29 @@ import org.restlet.resource.ServerResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class HaqosResource extends HaqosResourceBase {
-    protected static Logger log = LoggerFactory.getLogger(HaqosResource.class);
+public class HaqosEfResource extends ServerResource {
+    protected static Logger log = LoggerFactory.getLogger(HaqosBandwidthResource.class);
     
     
-    @Get("json")
-    public Map<String, Object> retrieve() {
-        HashMap<String, Object> result = new HashMap<String, Object> ();
-        Object values = null;
-        String switchId = (String) getRequestAttributes().get("switchId");
-
-        values = getQueuesOnSwitch (switchId);
-        result.put(switchId, values);
-        return result;
-    }
-
-
-    @Put
-    public String createQueuesOnPath() {
+    @Put("json")
+    public boolean createEfQueue() {
         long srcId =
-            HexString.toLong((String) getRequestAttributes().get("src-dpid"));
-        String srcPort = (String) getRequestAttributes().get("src-port");
+          HexString.toLong((String) getRequestAttributes().get("src-dpid"));
         long dstId =
-            HexString.toLong((String) getRequestAttributes().get("dst-dpid"));
-        String dstPort = (String) getRequestAttributes().get("dst-port");
+          HexString.toLong((String) getRequestAttributes().get("dst-dpid"));
         long bandwidth =
-            Long.parseLong((String) getRequestAttributes().get("bandwidth"));
-        short tcpPort =
-            Short.parseShort((String) getRequestAttributes().get("tcp"));
-        String srcIp = (String) getRequestAttributes().get("src-ip");
+          Long.parseLong((String) getRequestAttributes().get("bandwidth"));
 
-        boolean result =
-            createQueuesOnPath (srcId, srcPort, dstId, dstPort, bandwidth, tcpPort, srcIp);
+        short tpSrc =
+            Short.parseShort((String) getRequestAttributes().get("tp-src"));
+        short tpDst =
+            Short.parseShort((String) getRequestAttributes().get("tp-dst"));
 
-        return "{\"status\":\"ok\"}";
+        IHaqosService haqos =
+                (IHaqosService)getContext().getAttributes().
+                    get(IHaqosService.class.getCanonicalName());
+
+        return haqos.createEfQueue(srcId, dstId, bandwidth, tpSrc, tpDst);
     }
-
 
 }

@@ -169,7 +169,7 @@ public class Haqos
                 List<NodePortTuple> oldSwitches = route.getPath();
                 for (NodePortTuple nodes : oldSwitches) {
                     Long switchDpId = new Long(nodes.getNodeId());
-                    long currentBandwidth = portBandwidth.get(nodes.getPortId());
+                    long currentBandwidth = portBandwidth.get(nodes.getPortId()).longValue();
                     long updatedBandwidth = currentBandwidth -
                             bandwidthMap.get(routeId).longValue();
                     updateQueueOnPort(nodes, updatedBandwidth);
@@ -192,7 +192,7 @@ public class Haqos
                     Long switchDpId = new Long(nodes.getNodeId());
                     oldIdSet.add(switchDpId);
                     if (dpIdSet.contains(switchDpId) == false) {
-                        long currentBandwidth = portBandwidth.get(nodes.getPortId());
+                        long currentBandwidth = portBandwidth.get(nodes.getPortId()).longValue();
                         long updatedBandwidth = currentBandwidth -
                             bandwidthMap.get(routeId).longValue();
                         updateQueueOnPort(nodes, updatedBandwidth);
@@ -270,7 +270,6 @@ public class Haqos
         }
         synchronized (node) {
             if (bandwidth > 0) {
-                portBandwidth.put(portName, bandwidth);
                 qosName = "qos" + portId;
                 String queueName = "qu" + portId;
                 portBandwidth.put(portName, bandwidth);
@@ -334,6 +333,99 @@ public class Haqos
         return true;
     }
 
+
+    private void addFlowForEfQ (List<NodePortTuple> switches,
+                                short tpSrc, short tpDst) {
+        int i = 0;
+        int size = switches.size();
+        NodePortTuple start = switches.get(0);
+        long dpId = start.getNodeId();
+        short portId = start.getPortId();
+        IOFSwitch sw = floodlightProvider.getSwitch(dpId);
+
+        for (i = 0; i < size; i += 2) {
+            NodePortTuple node = switches.get(i);
+
+            dpId = node.getNodeId();
+            portId = node.getPortId();
+            sw = floodlightProvider.getSwitch(dpId);
+            OFMatch match = new OFMatch();
+            int wildCards = OFMatch.OFPFW_ALL &
+                ~OFMatch.OFPFW_NW_PROTO & ~OFMatch.OFPFW_DL_TYPE;
+            if (tpSrc != -1) {
+                wildCards = wildCards & ~OFMatch.OFPFW_TP_SRC;
+            }
+            if (tpDst != -1) {
+                wildCards = wildCards & ~OFMatch.OFPFW_TP_DST;
+            }
+            
+            match.setWildcards(wildCards);
+            match.setDataLayerType((short) 0x0800);
+            match.setNetworkProtocol((byte) 6);
+            if (tpSrc != -1) {
+                match.setTransportSource(tpSrc);
+            }
+            if (tpDst != -1) {
+                match.setTransportDestination(tpDst);
+            }
+            OFFlowMod fm = new OFFlowMod ();
+            List<OFAction> actions = new LinkedList<OFAction>();
+            OFActionEnqueue action = new OFActionEnqueue ();
+            action.setPort(portId);
+            // We have portId and QueueId same. check the place where
+            // queues are created.
+            action.setQueueId(portId);
+            actions.add(action);
+            long cookie = AppCookie.makeCookie(HAQOS_APP_ID, 0);
+            fm.setMatch(match)
+              .setActions(actions)
+              .setCommand(OFFlowMod.OFPFC_ADD)
+              .setCookie(cookie)
+              .setPriority(Short.MAX_VALUE)
+              .setBufferId(OFPacketOut.BUFFER_ID_NONE)
+              .setLengthU(OFFlowMod.MINIMUM_LENGTH +
+                          OFActionEnqueue.MINIMUM_LENGTH);
+            try {
+                sw.write(fm, null);
+                sw.flush();
+            } catch (IOException e) {
+                log.info (" Error adding flow to direct the flow to queue");
+            }
+       }
+    }
+
+
+    @Override
+    public boolean createEfQueue(long srcId, long dstId,
+        long bandwidth, short tpSrc, short tpDst) {
+        
+        Route route =
+                routingEngine.getRoute(srcId, dstId, 0);
+        List<NodePortTuple> switches = route.getPath();
+        int i = 0;
+        for (NodePortTuple node : switches) {
+            if ((i % 2) != 0) {
+                i += 1;
+                continue;
+            }
+            i += 1;
+            short portId = node.getPortId();
+            long dpId = node.getNodeId();
+            IOFSwitch sw = floodlightProvider.getSwitch(dpId);
+            ImmutablePort port = sw.getPort(portId);
+            log.info(" switchId " + dpId + " portId " + portId);
+            String portName = port.getName();
+            String qosName = "qos" + portId;
+            String queueName = "qu" + portId;
+            String[] command = {"python",
+                      "/home/snathan/floodlight-master/src/main/java/net/floodlightcontroller/haqos/CreateEfQueue.py",
+                      "--qName=" + queueName, "--srcPort=" + portName, "--qosName=" + qosName, "--qNum=" + portId,
+                      "--bandwidth=" + bandwidth};
+            callOvsUsingProcess(command, portName);
+        }
+        addFlowForEfQ(switches, tpSrc, tpDst);
+        return true;
+    }
 
     private long getUsedBandwidth (String portName) {
         long usedBandwidth = 0;
@@ -514,6 +606,9 @@ public class Haqos
         buffer.position(0);
         return buffer.getInt();
     }
+
+
+
 
 
     private void addFlowWithoutTunnel (List<NodePortTuple> switches,
