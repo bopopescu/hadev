@@ -79,6 +79,8 @@ import net.floodlightcontroller.topology.NodePortTuple;
 import net.floodlightcontroller.threadpool.IThreadPoolService;
 import net.floodlightcontroller.linkdiscovery.ILinkDiscovery.LDUpdate;
 import net.floodlightcontroller.linkdiscovery.ILinkDiscoveryService;
+import net.floodlightcontroller.linkdiscovery.ILinkDiscovery;
+import net.floodlightcontroller.linkdiscovery.ILinkDiscovery.UpdateOperation;
 import net.floodlightcontroller.packet.IPv4;
 
 import org.openflow.protocol.OFFlowMod;
@@ -114,6 +116,8 @@ public class Haqos
                IOFMessageListener, ITopologyListener {
     protected static Logger log = LoggerFactory.getLogger(Haqos.class);
 
+    protected static boolean useAggrRsvpWithDscp = true;
+    protected static long defaultDscpBandwidth = 30000000;
 
     public static final String MODULE_NAME = "haqos";
 
@@ -151,6 +155,11 @@ public class Haqos
     protected ConcurrentHashMap<NodePortTuple /*Port Id and switch id*/,
               String /*portName*/ > portNameMap;
 
+    protected ConcurrentHashMap<Long /*Switch DpId*/, Boolean /*Active or not*/> switchMap;
+    protected ConcurrentHashMap<Long /*Switch DpId*/, List<Short> /*ports on switch*/> switchPortMap;
+    protected ConcurrentHashMap<LDUpdate , Boolean /*Active or not*/> portQueueMap;
+
+
     @Override
     public void printTest() {
     }
@@ -158,6 +167,11 @@ public class Haqos
 
     @Override
     public void topologyChanged(List<LDUpdate> appliedUpdates) {
+
+
+        if (useAggrRsvpWithDscp == true) {
+            createQueuesOnSwitchConnect (appliedUpdates);
+        }
 
         for (RouteId routeId : routeMap.keySet()) {
             Route route = routeMap.get(routeId);
@@ -241,6 +255,91 @@ public class Haqos
         }
     }
 
+
+    private void createQueuesOnSwitchConnect (List<LDUpdate> updates) {
+        for (LDUpdate update : updates) {
+            long src = update.getSrc();
+            if (update.getOperation () == UpdateOperation.SWITCH_UPDATED) {
+                log.info ("src switch " + src);
+                log.info ("switch contains " + switchMap.contains(src));
+                if (switchMap.contains(src) == false ||
+                    (switchMap.contains(src) == true &&
+                     switchMap.get(src).booleanValue() == false)) {
+                    switchMap.put (src, true);
+                    List<Short> ports = new ArrayList<Short> ();
+                    switchPortMap.put (src, ports);
+                    //createQueuesOnPorts(src);
+                }
+            }
+            if (update.getOperation () == UpdateOperation.SWITCH_REMOVED) {
+                if (switchMap.contains(src) == true) {
+                    switchMap.put(src, false);
+                    List<Short> ports = switchPortMap.get(src);
+                    for (Short port : ports) {
+                        short portId = port.shortValue();
+                        NodePortTuple tuple =
+                          new NodePortTuple (src, portId);
+                        updateQueueOnPort (tuple, 0);
+                        LDUpdate compUpdate =
+                          new LDUpdate(src, portId, UpdateOperation.PORT_UP);
+                        portQueueMap.remove (compUpdate);
+                    }
+                    switchPortMap.remove(src);
+                }
+            }
+            if (update.getOperation () == UpdateOperation.PORT_UP) {
+                short portId = update.getSrcPort();
+                LDUpdate compUpdate =
+                  new LDUpdate(src, portId, UpdateOperation.PORT_UP);
+                if (portQueueMap.contains(compUpdate) == false ||
+                    (portQueueMap.contains(compUpdate) == true &&
+                     portQueueMap.get(compUpdate).booleanValue() == false)) {
+                    switchMap.put (src, true);
+                    List<Short> ports = switchPortMap.get(src);
+                    portQueueMap.put (compUpdate, true);
+                    createQueueOnPort (src, portId);
+                    if (portQueueMap.contains(compUpdate) == false) {
+                        ports.add(portId);
+                        switchPortMap.put(src, ports);
+                    }
+                }
+            }
+            if (update.getOperation () == UpdateOperation.PORT_DOWN) {
+                short portId = update.getSrcPort();
+                LDUpdate compUpdate =
+                  new LDUpdate(src, portId, UpdateOperation.PORT_UP);
+                portQueueMap.put (compUpdate, false);
+                NodePortTuple tuple =
+                          new NodePortTuple (src, portId);
+                updateQueueOnPort (tuple, 0);
+            }
+        }
+    }
+
+
+    private void createQueuesOnPorts (long src) {
+        Set<Short> ports = topology.getPortsWithLinks (src);
+        if (ports == null) {
+            return;
+        }
+        for (Short port : ports) {
+            createQueueOnPort (src, port.shortValue());
+        }
+    }
+
+
+    private void createQueueOnPort (long src, short portId) {
+        IOFSwitch sw = floodlightProvider.getSwitch(src);
+        ImmutablePort immPort = sw.getPort(portId);
+        String portName = immPort.getName();
+        String qosName = "qos" + portId;
+        String queueName = "qu" + portId;
+        String[] command = {"python",
+          "/home/snathan/floodlight-master/src/main/java/net/floodlightcontroller/haqos/CreateEfQueue.py",
+          "--qName=" + queueName, "--srcPort=" + portName, "--qosName=" + qosName, "--qNum=" + portId,
+          "--bandwidth=" + defaultDscpBandwidth};
+        callOvsUsingProcess(command, portName);
+    }
 
     private void updateQueueOnPort (NodePortTuple node, long bandwidth) {
 
@@ -929,6 +1028,9 @@ public class Haqos
         portRouteMap = new ConcurrentHashMap<String, List<RouteId>> ();
         portBandwidth = new ConcurrentHashMap<String, Long> ();
         portNameMap = new ConcurrentHashMap<NodePortTuple, String> ();
+        switchMap = new ConcurrentHashMap<Long, Boolean> ();
+        switchPortMap = new ConcurrentHashMap<Long, List<Short>> ();
+        portQueueMap = new ConcurrentHashMap<LDUpdate, Boolean> ();
         log.info("at init of Haqos");
 
     }
