@@ -49,8 +49,10 @@ public class HaqosInterResource extends ServerResource {
     public boolean reserveInterBandwidth () {
         long srcId =
           HexString.toLong((String) getRequestAttributes().get("src-dpid"));
+        String srcPort = (String) getRequestAttributes().get("src-port");
         long dstId =
           HexString.toLong((String) getRequestAttributes().get("dst-dpid"));
+        String dstPort = (String) getRequestAttributes().get("dst-port");
         long bandwidth =
           Long.parseLong((String) getRequestAttributes().get("bandwidth"));
 
@@ -62,7 +64,8 @@ public class HaqosInterResource extends ServerResource {
                 (IHaqosService)getContext().getAttributes().
                     get(IHaqosService.class.getCanonicalName());
 
-        return haqos.reserveInterBandwidth(srcId, dstId, bandwidth, tpSrc, srcIp);
+        return haqos.reserveInterBandwidth(srcId, srcPort, dstId,
+                                dstPort, bandwidth, tpSrc, srcIp);
     }
 
 }

@@ -13,79 +13,100 @@ import sys
 import time
 from mininet.topo import Topo
 from mininet.net import Mininet
-from mininet.node import CPULimitedHost
 from mininet.link import TCLink
+from mininet.node import CPULimitedHost
 from mininet.node import RemoteController
 from mininet.cli import CLI
 from mininet.log import setLogLevel, info
-import requests
-import threading
 
-
-
-
-
-def createTopo(  ):
-    "Simple topology example."
-
+def createDatacenter( ):
 
     net = Mininet( controller=RemoteController)
-    params = {'ip':'127.0.0.1','port':6633}
+
     info( '*** Adding controller\n' )
-    net.addController( 'c0', controller=RemoteController, **params)
+    net.addController( 'c0', controller=RemoteController,ip="127.0.0.1",port=6633 )
 
-    # Add hosts and switches
-    host1 = net.addHost( 'h1' )
-    host2 = net.addHost( 'h2' )
-    host3 = net.addHost( 'h3' )
-    host4 = net.addHost( 'h4' )
-    leftSwitch = net.addSwitch( 's5' )
-    rightSwitch = net.addSwitch( 's6' )
-    centerSwitchl = net.addSwitch( 's7' )
-    centerSwitchr = net.addSwitch( 's8' )
+    # Build 16 hosts 
+    hosts = [];
+    i = 0;
+    while (i < 24):
+        hosts.append(net.addHost('h%s' % (i+1)));
+        i += 1;
 
-    # Add links
-    linkOpts = {'bw':100};
-    net.addLink( host1, leftSwitch ) #, cls=TCLink, **linkOpts)
-    net.addLink( host2, leftSwitch ) #, cls=TCLink, **linkOpts)
-    linkOpts = {'bw':100};
-    net.addLink( leftSwitch, centerSwitchl ) #, cls=TCLink, **linkOpts)
-    net.addLink( centerSwitchl, centerSwitchr) # , cls=TCLink, **linkOpts)
-    net.addLink( centerSwitchr, rightSwitch) # , cls=TCLink, **linkOpts)
+    # Build 2 Core switches
+    core = [];
+    j = 0;
+    while (j < 2):
+        core.append(net.addSwitch('s%s' % (i+1)));
+        i += 1;
+        j += 1;
 
+    # Build 4 Aggr switches
+    aggr = [];
+    j = 0;
+    while (j < 4):
+        aggr.append(net.addSwitch('s%s' % (i+1)));
+        i += 1;
+        j += 1;
+
+    # Build 8 Edge switches
+    edge = [];
+    j = 0;
+    while (j < 8):
+        edge.append(net.addSwitch('s%s' % (i+1)));
+        i += 1;
+        j += 1;
+
+
+    # Link aggr with core 
+    i = 0;
     linkOpts = {'bw':100};
-    net.addLink( rightSwitch, host3) #, cls=TCLink, **linkOpts)
-    net.addLink( rightSwitch, host4) #, cls=TCLink, **linkOpts)
-    
+    while (i < 4):
+        j = 0;
+        while j < 2:
+            net.addLink (aggr[i], core[j]) #, cls=TCLink, **linkOpts);
+            j += 1;
+        i += 1;
+
+    # Link edge with aggr
+    i = 0;
+    linkOpts = {'bw':50};
+    while (i < 8):
+        j = i / 2;
+        net.addLink (edge[i], aggr[j]) #, cls=TCLink, **linkOpts);
+        i += 1;
+
+    # Link host with edge
+    i = 0;
+    linkOpts = {'bw':20};
+    while (i < 24):
+        j = i / 3;
+        net.addLink (hosts[i], edge[j]) #, cls=TCLink, **linkOpts);
+        i += 1;
+
 
     info( '*** Starting network\n')
     net.start()
-    net.pingAll();
+
+
     time.sleep(5);
 
+
     info( '*** adding q h1-h2\n' )
-    cmd1 = 'curl -i http://221.199.216.240:8080/wm/haqos/createEfQ/00:00:00:00:00:00:00:05/00:00:00:00:00:00:00:06/60000000/5001/-1/json -X PUT';
+    cmd1 = 'curl -i http://221.199.216.240:8080/wm/haqos/createEfQ/00:00:00:00:00:00:00:1f/00:00:00:00:00:00:00:26/60000000/5001/-1/json -X PUT';
     result1 = os.popen(cmd1);
     time.sleep(3);
     info( '*** adding q h2-h1\n' )
-    cmd2 = 'curl -i http://221.199.216.240:8080/wm/haqos/createEfQ/00:00:00:00:00:00:00:06/00:00:00:00:00:00:00:05/60000000/-1/5001/json -X PUT';
+    cmd2 = 'curl -i http://221.199.216.240:8080/wm/haqos/createEfQ/00:00:00:00:00:00:00:26/00:00:00:00:00:00:00:1f/60000000/-1/5001/json -X PUT';
 
     result2 = os.popen(cmd2);
 
-
-    time.sleep(5);
-
-
     info( '*** Running CLI\n' )
     CLI( net )
-
-
 
     info( '*** Stopping network' )
     net.stop()
 
 if __name__ == '__main__':
     setLogLevel( 'info' )
-    createTopo()
-
-
+    createDatacenter()

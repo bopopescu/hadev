@@ -8,6 +8,9 @@ Adding the 'topos' dict with a key/value pair to generate our newly defined
 topology enables one to pass in '--topo=mytopo' from the command line.
 """
 
+import os
+import sys
+import time
 from mininet.topo import Topo
 from mininet.net import Mininet
 from mininet.link import TCLink
@@ -26,7 +29,7 @@ def createDatacenter( ):
     # Build 16 hosts 
     hosts = [];
     i = 0;
-    while (i < 16):
+    while (i < 24):
         hosts.append(net.addHost('h%s' % (i+1)));
         i += 1;
 
@@ -61,7 +64,7 @@ def createDatacenter( ):
     while (i < 4):
         j = 0;
         while j < 2:
-            net.addLink (aggr[i], core[j], cls=TCLink, **linkOpts);
+            net.addLink (aggr[i], core[j]) #, cls=TCLink, **linkOpts);
             j += 1;
         i += 1;
 
@@ -70,20 +73,52 @@ def createDatacenter( ):
     linkOpts = {'bw':50};
     while (i < 8):
         j = i / 2;
-        net.addLink (edge[i], aggr[j], cls=TCLink, **linkOpts);
+        net.addLink (edge[i], aggr[j]) #, cls=TCLink, **linkOpts);
         i += 1;
 
     # Link host with edge
     i = 0;
     linkOpts = {'bw':20};
-    while (i < 16):
-        j = i / 2;
-        net.addLink (hosts[i], edge[j], cls=TCLink, **linkOpts);
+    while (i < 24):
+        j = i / 3;
+        net.addLink (hosts[i], edge[j]) #, cls=TCLink, **linkOpts);
         i += 1;
 
 
     info( '*** Starting network\n')
     net.start()
+
+
+    time.sleep(5);
+
+    info( '*** adding q h1-h2\n' )
+    cmd1 = 'curl -i http://221.199.216.240:8080/wm/haqos/addqueues/00:00:00:00:00:00:00:1f/s31-eth2/00:00:00:00:00:00:00:26/s38-eth2/30000000/5001/10.0.0.1/json -X PUT';
+    result1 = os.popen(cmd1);
+    time.sleep(3);
+    info( '*** adding q h2-h1\n' )
+    cmd2 = 'curl -i http://221.199.216.240:8080/wm/haqos/addqueues/00:00:00:00:00:00:00:26/s38-eth2/00:00:00:00:00:00:00:1f/s31-eth2/30000000/-1/10.0.0.22/json -X PUT';
+
+    result2 = os.popen(cmd2);
+
+
+    #info( '*** adding q h1-h2\n' )
+    cmd1 = 'curl -i http://221.199.216.240:8080/wm/haqos/addqueues/00:00:00:00:00:00:00:1f/s31-eth3/00:00:00:00:00:00:00:26/s38-eth3/30000000/5001/10.0.0.2/json -X PUT';
+    result1 = os.popen(cmd1);
+    time.sleep(3);
+    info( '*** adding q h2-h1\n' )
+    cmd2 = 'curl -i http://221.199.216.240:8080/wm/haqos/addqueues/00:00:00:00:00:00:00:26/s38-eth3/00:00:00:00:00:00:00:1f/s31-eth3/30000000/-1/10.0.0.23/json -X PUT';
+
+    result2 = os.popen(cmd2);
+
+
+    cmd1 = 'curl -i http://221.199.216.240:8080/wm/haqos/addqueues/00:00:00:00:00:00:00:1f/s31-eth4/00:00:00:00:00:00:00:26/s38-eth4/30000000/5001/10.0.0.3/json -X PUT';
+    result1 = os.popen(cmd1);
+    time.sleep(3);
+    info( '*** adding q h2-h1\n' )
+    cmd2 = 'curl -i http://221.199.216.240:8080/wm/haqos/addqueues/00:00:00:00:00:00:00:26/s38-eth4/00:00:00:00:00:00:00:1f/s31-eth4/30000000/-1/10.0.0.24/json -X PUT';
+
+    result2 = os.popen(cmd2);
+
 
     info( '*** Running CLI\n' )
     CLI( net )

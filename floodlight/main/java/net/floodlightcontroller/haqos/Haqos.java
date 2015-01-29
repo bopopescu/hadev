@@ -117,7 +117,7 @@ public class Haqos
     protected static Logger log = LoggerFactory.getLogger(Haqos.class);
 
     protected static boolean useAggrRsvpWithDscp = true;
-    protected static long defaultDscpBandwidth = 30000000;
+    protected static long defaultDscpBandwidth = 60000000;
 
     public static final String MODULE_NAME = "haqos";
 
@@ -264,9 +264,9 @@ public class Haqos
             long src = update.getSrc();
             if (update.getOperation () == UpdateOperation.SWITCH_UPDATED) {
                 log.info ("src switch " + src);
-                log.info ("switch contains " + switchMap.contains(src));
-                if (switchMap.contains(src) == false ||
-                    (switchMap.contains(src) == true &&
+                log.info ("switch contains " + switchMap.containsKey(src));
+                if (switchMap.containsKey(src) == false ||
+                    (switchMap.containsKey(src) == true &&
                      switchMap.get(src).booleanValue() == false)) {
                     switchMap.put (src, true);
                     List<Short> ports = new ArrayList<Short> ();
@@ -275,7 +275,7 @@ public class Haqos
                 }
             }
             if (update.getOperation () == UpdateOperation.SWITCH_REMOVED) {
-                if (switchMap.contains(src) == true) {
+                if (switchMap.containsKey(src) == true) {
                     switchMap.put(src, false);
                     List<Short> ports = switchPortMap.get(src);
                     for (Short port : ports) {
@@ -294,15 +294,14 @@ public class Haqos
                 short portId = update.getSrcPort();
                 LDUpdate compUpdate =
                   new LDUpdate(src, portId, UpdateOperation.PORT_UP);
-                if (portQueueMap.contains(compUpdate) == false ||
-                    (portQueueMap.contains(compUpdate) == true &&
+                if (portQueueMap.containsKey(compUpdate) == false ||
+                    (portQueueMap.containsKey(compUpdate) == true &&
                      portQueueMap.get(compUpdate).booleanValue() == false)) {
                     switchMap.put (src, true);
                     List<Short> ports = switchPortMap.get(src);
                     portQueueMap.put (compUpdate, true);
-                    log.info (" creating port for " + src + " " + portId);
                     createQueueOnPort (src, portId);
-                    if (portQueueMap.contains(compUpdate) == false) {
+                    if (portQueueMap.containsKey(compUpdate) == false) {
                         ports.add(portId);
                         switchPortMap.put(src, ports);
                     }
@@ -349,31 +348,34 @@ public class Haqos
 
     private void updateQueueOnPort (NodePortTuple node, long bandwidth) {
 
-        short portId = node.getPortId(); 
-        String portName = portNameMap.get(node);
-        String qosName = qosMap.get(portName);
-        String[] command = {"python",
-            "/home/snathan/floodlight-master/src/main/java/net/floodlightcontroller/haqos/DeleteQos.py",
-            "--qosName=" + qosName, "--portName=" + portName};
-
         synchronized (node) {
-            deleteQosUsingProcess(command);
+            short portId = node.getPortId(); 
+            String portName = portNameMap.get(node);
+            String qosName;
+            if (qosMap.containsKey(portName)) {
+                qosName = qosMap.get(portName);
+                String[] command = {"python",
+                    "/home/snathan/floodlight-master/src/main/java/net/floodlightcontroller/haqos/DeleteQos.py",
+                    "--qosName=" + qosName, "--portName=" + portName};
 
-            List<String> queueNames = queueMap.get(portName);
-            if (queueNames != null) {
-                for (String queueName : queueNames) {
-
-                    String [] cmd = {"python",
-                      "/home/snathan/floodlight-master/src/main/java/net/floodlightcontroller/haqos/DeleteQueue.py",
-                      "--queueName=" + queueName};
-                    deleteQosUsingProcess(cmd);
-                }
+                deleteQosUsingProcess(command);
+                qosMap.remove(portName);
             }
-            qosMap.remove(portName);
-            queueMap.remove(portName);
-            portBandwidth.remove(portName);
-        }
-        synchronized (node) {
+            if (queueMap.containsKey(portName)) {
+                List<String> queueNames = queueMap.get(portName);
+                if (queueNames != null) {
+                    for (String queueName : queueNames) {
+
+                        String [] cmd = {"python",
+                          "/home/snathan/floodlight-master/src/main/java/net/floodlightcontroller/haqos/DeleteQueue.py",
+                          "--queueName=" + queueName};
+                        deleteQosUsingProcess(cmd);
+                    }
+                }
+                queueMap.remove(portName);
+                portBandwidth.remove(portName);
+            }
+
             if (bandwidth > 0) {
                 qosName = "qos" + portId;
                 String queueName = "qu" + portId;
@@ -440,45 +442,59 @@ public class Haqos
 
 
     @Override
-    public boolean reserveInterBandwidth(long srcId, long dstId,
-                        long bandwidth, short tpSrc, String srcIp) {
+    public boolean reserveInterBandwidth(long srcId, String srcPort, long dstId,
+                    String dstPort, long bandwidth, short tpSrc, String srcIp) {
         
+        IOFSwitch sw = floodlightProvider.getSwitch(srcId);
+        ImmutablePort port = sw.getPort(srcPort);
+        short srcPortNum = port.getPortNumber();
+
+        IOFSwitch dstSw = floodlightProvider.getSwitch(dstId);
+        ImmutablePort dstImmPort = dstSw.getPort(dstPort);
+        short dstPortNum = dstImmPort.getPortNumber();
+
         Route route =
-                routingEngine.getRoute(srcId, dstId, 0);
-        if (route == null) {
-            log.info (" null route ");
-        }
+                routingEngine.getRoute(srcId, srcPortNum, dstId, dstPortNum, 0);
         List<NodePortTuple> switches = route.getPath();
+        int i = 0;
         for (NodePortTuple node : switches) {
+            if ((i % 2) == 0) {
+                i += 1;
+                continue;
+            }
+            i += 1;
             short portId = node.getPortId();
             long dpId = node.getNodeId();
-            IOFSwitch sw = floodlightProvider.getSwitch(dpId);
-            ImmutablePort port = sw.getPort(portId);
+            sw = floodlightProvider.getSwitch(dpId);
+            port = sw.getPort(portId);
             String portName = port.getName();
             long speedInBps = port.getCurrentPortSpeed().getSpeedBps();
             if (speedInBps == 0) {
-                log.info("port has 0 speed, setting 1000");
                 speedInBps = 100000000;
             }
-            log.info (" resreving bandwidth on " + srcId + " " + portId + " " + portName);
-            if (portBandwidth.contains (portName) == false) {
+            if (portBandwidth.containsKey (portName) == false) {
                 createQueueOnPort (dpId, portId);
+                portBandwidth.put(portName, defaultDscpBandwidth);
             }
             long dscpBandwidth = portBandwidth.get(portName);
 
             long alreadyRsvd = 0;
-            if (portInterBandwidth.contains(portName)) {
+            if (portInterBandwidth.containsKey(portName)) {
                 alreadyRsvd = portInterBandwidth.get(portName);
             }
+            
+            portInterBandwidth.put(portName, alreadyRsvd + bandwidth);
+            log.info (" resv for " + dpId + " port " + portId + " already rsvd " + alreadyRsvd + " bandwidth " + bandwidth);
             if ((dscpBandwidth - alreadyRsvd) < bandwidth) {
                 if (speedInBps < (alreadyRsvd + bandwidth)) {
                     return false;
                 }
+                log.info (" increasing resv for " + dpId + " port " + portId + " new bw " + (alreadyRsvd + bandwidth));
                 updateQueueOnPort (node, alreadyRsvd + bandwidth);
+                portBandwidth.put(portName, alreadyRsvd + bandwidth);
             }
-            portInterBandwidth.put(portName, alreadyRsvd + bandwidth);
         }
-        addFlowWithoutTunnel (switches, tpSrc, srcIp, 0); 
+        addFlowWithoutTunnel (switches, tpSrc, srcIp, 1); 
         return true;
     }
 
@@ -672,12 +688,7 @@ public class Haqos
     private void callOvsUsingProcess(String[] command, String srcPort) {
 
         try {
-            log.info(" before start ");
-            for (String cmd : command) {
-                log.info(cmd);
-            }
             Process cmdProcess = new ProcessBuilder(command).start();
-            log.info(" after start ");
             InputStream inputStream = cmdProcess.getInputStream();
             InputStreamReader inputReader = new InputStreamReader(inputStream);
             BufferedReader bufReader = new BufferedReader(inputReader);
@@ -688,14 +699,12 @@ public class Haqos
                 if (line == "") {
                     continue;
                 }
-                log.info(line);
                 if (i == 0) {
                     qosMap.put(srcPort, line);
                 } else {
                     qidList.add(line);
                 }
                 i += 1;
-                log.info(line);
             }
             queueMap.put(srcPort, qidList);
         } catch (IOException e) {
@@ -770,7 +779,6 @@ public class Haqos
         short portId = start.getPortId();
         IOFSwitch sw = floodlightProvider.getSwitch(dpId);
 
-        log.info("at add flow without tunnel ");
         //InetSocketAddress srcIp = (InetSocketAddress)sw.getInetAddress();
         //InetAddress srcInet = srcIp.getAddress();
         //int srcNetworkAddress = getIpAddressInInt(srcInet);
@@ -792,8 +800,6 @@ public class Haqos
             portId = node.getPortId();
             sw = floodlightProvider.getSwitch(dpId);
             OFMatch match = new OFMatch();
-            log.info("input port " + inputPort);
-            log.info("tcp port " + tcpPort);
             int wildCards = OFMatch.OFPFW_ALL & /*~OFMatch.OFPFW_NW_SRC_MASK &*/
                 /*~OFMatch.OFPFW_TP_SRC & ~OFMatch.OFPFW_IN_PORT &*/
                 ~OFMatch.OFPFW_NW_PROTO & ~OFMatch.OFPFW_DL_TYPE;
@@ -815,7 +821,6 @@ public class Haqos
             if (tcpPort != -1) {
                 match.setTransportSource(tcpPort);
             }
-            log.info(" src Ip " + srcIp);
             if (srcIp.equals("None") == false) {
                 InetAddress srcIpInet = null;
                 try {
@@ -825,8 +830,6 @@ public class Haqos
                 }
                 match.setNetworkSource(getIpAddressInInt(srcIpInet));
             }
-            log.info("after setting tcp port " + match.getTransportSource());
-            log.info("wildcard " + match.getWildcards());
             OFFlowMod fm = new OFFlowMod ();
             List<OFAction> actions = new LinkedList<OFAction>();
             OFActionEnqueue action = new OFActionEnqueue ();
@@ -996,13 +999,15 @@ public class Haqos
                 long switchId = tuple.getNodeId();
                 long useBandwidth = bandwidth;
                 short portId = tuple.getPortId();
-                i += 1;
                 /*if ((switchId == srcId && portNum == portId) || switchId == dstId) {
                     continue;
                 }*/
                 if ((i % 2) == 0) {
+                    i += 1;
                     continue;
                 }
+                i += 1;
+                log.info (" switch id " + switchId + " portId " + portId);
                 sw = floodlightProvider.getSwitch(switchId);
                 port = sw.getPort(portId);
                 String portName = port.getName();
