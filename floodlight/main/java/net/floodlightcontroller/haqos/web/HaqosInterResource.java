@@ -41,12 +41,12 @@ import org.restlet.resource.ServerResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class HaqosEfResource extends ServerResource {
-    protected static Logger log = LoggerFactory.getLogger(HaqosEfResource.class);
+public class HaqosInterResource extends ServerResource {
+    protected static Logger log = LoggerFactory.getLogger(HaqosInterResource.class);
     
     
     @Put("json")
-    public boolean createEfQueue() {
+    public boolean reserveInterBandwidth () {
         long srcId =
           HexString.toLong((String) getRequestAttributes().get("src-dpid"));
         long dstId =
@@ -56,14 +56,13 @@ public class HaqosEfResource extends ServerResource {
 
         short tpSrc =
             Short.parseShort((String) getRequestAttributes().get("tp-src"));
-        short tpDst =
-            Short.parseShort((String) getRequestAttributes().get("tp-dst"));
+        String srcIp = (String) getRequestAttributes().get("src-ip");
 
         IHaqosService haqos =
                 (IHaqosService)getContext().getAttributes().
                     get(IHaqosService.class.getCanonicalName());
 
-        return haqos.createEfQueue(srcId, dstId, bandwidth, tpSrc, tpDst);
+        return haqos.reserveInterBandwidth(srcId, dstId, bandwidth, tpSrc, srcIp);
     }
 
 }

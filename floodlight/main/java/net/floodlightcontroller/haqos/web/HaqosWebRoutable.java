@@ -44,6 +44,7 @@ public class HaqosWebRoutable implements RestletRoutable {
         router.attach("/addqueues/{src-dpid}/{src-port}/{dst-dpid}/{dst-port}/{bandwidth}/{tcp}/{src-ip}/json", HaqosResource.class); // PUT
         router.attach("/hasbandwidth/{src-dpid}/{dst-dpid}/{bandwidth}/json", HaqosBandwidthResource.class); // GET
         router.attach("/createEfQ/{src-dpid}/{dst-dpid}/{bandwidth}/{tp-src}/{tp-dst}/json", HaqosEfResource.class); // PUT
+        router.attach("/reserveInterBw/{src-dpid}/{dst-dpid}/{bandwidth}/{tp-src}/{src-ip}/json", HaqosInterResource.class); // PUT
         return router;
     }
 

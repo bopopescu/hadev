@@ -142,6 +142,8 @@ public class Haqos
 
     protected ConcurrentHashMap<String /*PortName*/,
               Long /*total port reservation*/ > portBandwidth;
+    protected ConcurrentHashMap<String /*PortName*/,
+              Long /*total port reservation*/ > portInterBandwidth;
 
     protected ConcurrentHashMap<RouteId, Route> routeMap;
     protected ConcurrentHashMap<RouteId, Short> sourcePortMap;
@@ -171,6 +173,7 @@ public class Haqos
 
         if (useAggrRsvpWithDscp == true) {
             createQueuesOnSwitchConnect (appliedUpdates);
+            return;
         }
 
         for (RouteId routeId : routeMap.keySet()) {
@@ -297,6 +300,7 @@ public class Haqos
                     switchMap.put (src, true);
                     List<Short> ports = switchPortMap.get(src);
                     portQueueMap.put (compUpdate, true);
+                    log.info (" creating port for " + src + " " + portId);
                     createQueueOnPort (src, portId);
                     if (portQueueMap.contains(compUpdate) == false) {
                         ports.add(portId);
@@ -338,6 +342,8 @@ public class Haqos
           "/home/snathan/floodlight-master/src/main/java/net/floodlightcontroller/haqos/CreateEfQueue.py",
           "--qName=" + queueName, "--srcPort=" + portName, "--qosName=" + qosName, "--qNum=" + portId,
           "--bandwidth=" + defaultDscpBandwidth};
+        portBandwidth.put(portName, defaultDscpBandwidth);
+        log.info (" created port for " + portName);
         callOvsUsingProcess(command, portName);
     }
 
@@ -431,6 +437,51 @@ public class Haqos
         }
         return true;
     }
+
+
+    @Override
+    public boolean reserveInterBandwidth(long srcId, long dstId,
+                        long bandwidth, short tpSrc, String srcIp) {
+        
+        Route route =
+                routingEngine.getRoute(srcId, dstId, 0);
+        if (route == null) {
+            log.info (" null route ");
+        }
+        List<NodePortTuple> switches = route.getPath();
+        for (NodePortTuple node : switches) {
+            short portId = node.getPortId();
+            long dpId = node.getNodeId();
+            IOFSwitch sw = floodlightProvider.getSwitch(dpId);
+            ImmutablePort port = sw.getPort(portId);
+            String portName = port.getName();
+            long speedInBps = port.getCurrentPortSpeed().getSpeedBps();
+            if (speedInBps == 0) {
+                log.info("port has 0 speed, setting 1000");
+                speedInBps = 100000000;
+            }
+            log.info (" resreving bandwidth on " + srcId + " " + portId + " " + portName);
+            if (portBandwidth.contains (portName) == false) {
+                createQueueOnPort (dpId, portId);
+            }
+            long dscpBandwidth = portBandwidth.get(portName);
+
+            long alreadyRsvd = 0;
+            if (portInterBandwidth.contains(portName)) {
+                alreadyRsvd = portInterBandwidth.get(portName);
+            }
+            if ((dscpBandwidth - alreadyRsvd) < bandwidth) {
+                if (speedInBps < (alreadyRsvd + bandwidth)) {
+                    return false;
+                }
+                updateQueueOnPort (node, alreadyRsvd + bandwidth);
+            }
+            portInterBandwidth.put(portName, alreadyRsvd + bandwidth);
+        }
+        addFlowWithoutTunnel (switches, tpSrc, srcIp, 0); 
+        return true;
+    }
+
 
 
     private void addFlowForEfQ (List<NodePortTuple> switches,
@@ -711,7 +762,7 @@ public class Haqos
 
 
     private void addFlowWithoutTunnel (List<NodePortTuple> switches,
-                                        short tcpPort, String srcIp) {
+                                        short tcpPort, String srcIp, int index) {
         int i = 0;
         int size = switches.size();
         NodePortTuple start = switches.get(0);
@@ -728,10 +779,14 @@ public class Haqos
         // At Index 2 connection from bridge to the 2nd switch.
         // So at index 3, 5, 7 ... we have the out ports in all
         // the links towards destination.
-        for (i = 1; i < size; i += 2) {
+        for (i = index; i < size; i += 2) {
             NodePortTuple node = switches.get(i);
-            NodePortTuple prevNode = switches.get(i-1);
-            short inputPort = prevNode.getPortId();
+            NodePortTuple prevNode;
+            short inputPort = 0;
+            if (i > 0) {
+                prevNode= switches.get(i-1);
+                inputPort = prevNode.getPortId();
+            }
 
             dpId = node.getNodeId();
             portId = node.getPortId();
@@ -740,8 +795,11 @@ public class Haqos
             log.info("input port " + inputPort);
             log.info("tcp port " + tcpPort);
             int wildCards = OFMatch.OFPFW_ALL & /*~OFMatch.OFPFW_NW_SRC_MASK &*/
-                /*~OFMatch.OFPFW_TP_SRC &*/ ~OFMatch.OFPFW_IN_PORT &
+                /*~OFMatch.OFPFW_TP_SRC & ~OFMatch.OFPFW_IN_PORT &*/
                 ~OFMatch.OFPFW_NW_PROTO & ~OFMatch.OFPFW_DL_TYPE;
+            if (i > 0) {
+                wildCards = wildCards & ~OFMatch.OFPFW_IN_PORT;
+            }
             if (tcpPort != -1) {
                 wildCards = wildCards & ~OFMatch.OFPFW_TP_SRC;
             }
@@ -749,9 +807,11 @@ public class Haqos
                 wildCards = wildCards & ~OFMatch.OFPFW_NW_SRC_MASK;
             }
             match.setWildcards(wildCards);
-            match.setInputPort(inputPort);
             match.setDataLayerType((short) 0x0800);
             match.setNetworkProtocol((byte) 6);
+            if ( i > 0) {
+                match.setInputPort(inputPort);
+            }
             if (tcpPort != -1) {
                 match.setTransportSource(tcpPort);
             }
@@ -886,7 +946,7 @@ public class Haqos
         int i = 0;
         if (tunnelStart == -1) {
             log.info(" calling without tunnel ");
-            addFlowWithoutTunnel(switches, tcpPort, srcIp);
+            addFlowWithoutTunnel(switches, tcpPort, srcIp, 1);
         } else {
             addFlowWithTunnel(switches, tcpPort, tunnelStart, tunnelEnd);
         }
@@ -1027,6 +1087,7 @@ public class Haqos
         bandwidthMap = new ConcurrentHashMap<RouteId, Long> ();
         portRouteMap = new ConcurrentHashMap<String, List<RouteId>> ();
         portBandwidth = new ConcurrentHashMap<String, Long> ();
+        portInterBandwidth = new ConcurrentHashMap<String, Long> ();
         portNameMap = new ConcurrentHashMap<NodePortTuple, String> ();
         switchMap = new ConcurrentHashMap<Long, Boolean> ();
         switchPortMap = new ConcurrentHashMap<Long, List<Short>> ();
