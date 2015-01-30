@@ -49,3 +49,12 @@ bandwidth is available on the route.
 The above API (invoked using PUT) is similar to 2) but the method used to 
 reserve is 'Aggregation of RSVP using DSCP'.
 
+
+
+
+
+NOTE: To run 'Aggregation of RSVP using DSCP' one has to change the value of
+field 'useAggrRsvpWithDscp' in Haqos.java to true and compile the SDN code.
+
+And to run 'Aggregation of RSVP' and 'Diffserv using DSCP' the above field
+value should be set to false.

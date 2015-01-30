@@ -1,3 +1,110 @@
+                              ---- MININET EVALUATION FOR HADEV ----
+
+This folder contains test scripts for mininet evaluation.
+The description of scripts are below:
+
+1) test-haqos-basic-rsvp.py
+This script creates the follwing topology (h1,h2)-s5-s6-s7-s8-(h3,h4).
+This uses the 'Aggregation of RSVP' REST APIs of haqos module in floodlight
+SDN controller to reserve bandwidth. Once the topology ic created, the user needs
+to run iperf on hosts to test the bandwidth reserved as follows:
+h1 iperf -s &
+h2 iperf -s &
+h3 iperf -c 10.0.0.1 -t 100 &
+h4 iperf -c 10.0.0.2 -t 100 &
+The flows can be dumped using ovs-ofctl command to check the bytes transferred and 
+one can compute the bandwidth got. Iperf clients at both h3 and h4 need to be run
+simultaneously to know the bandwidth expecially when comparing with DSCP.
+
+
+2) test-haqos-basic-dscp.py
+This script creates the follwing topology (h1,h2)-s5-s6-s7-s8-(h3,h4).
+This uses the 'Diffserv DSCP' REST APIs of haqos module in floodlight
+SDN controller to reserve bandwidth. Once the topology ic created, the user needs
+to run iperf on hosts to test the bandwidth reserved as follows:
+h1 iperf -s &
+h2 iperf -s &
+h3 iperf -c 10.0.0.1 -t 100 &
+h4 iperf -c 10.0.0.2 -t 100 &
+The flows can be dumped using ovs-ofctl command to check the bytes transferred and 
+one can compute the bandwidth got. Iperf clients at both h3 and h4 need to be run
+simultaneously to know that the bandwidth got is less than actually intended.
+
+
+3) test-haqos-basic-inter.py
+This script creates the follwing topology (h1,h2)-s5-s6-s7-s8-(h3,h4).
+This uses the 'Aggregation of RSVP using DSCP' REST APIs of haqos module in floodlight
+SDN controller to reserve bandwidth. Once the topology ic created, the user needs
+to run iperf on hosts to test the bandwidth reserved as follows:
+h1 iperf -s &
+h2 iperf -s &
+h3 iperf -c 10.0.0.1 -t 100 &
+h4 iperf -c 10.0.0.2 -t 100 &
+The flows can be dumped using ovs-ofctl command to check the bytes transferred and 
+one can compute the bandwidth got. Iperf clients at both h3 and h4 need to be run
+simultaneously to know the bandwidth expecially when comparing with DSCP.
+
+
+4) test-haqos.py
+This script creates a tree topology with 8 edge switches and each edge switch
+connected to 3 hosts for a total of 24 hosts. There are 4 aggregation switches
+and each aggergation switch connects to 2 edge switches. There are 2 core switches
+and each core switch is connected to 2 aggergation switches. This uses the
+'Aggregation of RSVP' REST APIs of haqos module in floodlight
+SDN controller to reserve bandwidth. Once the topology ic created, the user needs
+to run iperf on hosts to test the bandwidth reserved as follows:
+h1 iperf -s &
+h2 iperf -s &
+h3 iperf -s &
+h22 iperf -c 10.0.0.1 -t 100 &
+h23 iperf -c 10.0.0.2 -t 100 &
+h24 iperf -c 10.0.0.2 -t 100 &
+The flows can be dumped using ovs-ofctl command to check the bytes transferred and 
+one can compute the bandwidth got. Iperf clients at h22, h23 and h4 need to be run
+simultaneously to know the bandwidth expecially when comparing with DSCP.
+
+
+
+5) test-haqos-dscp.py
+This script creates a tree topology with 8 edge switches and each edge switch
+connected to 3 hosts for a total of 24 hosts. There are 4 aggregation switches
+and each aggergation switch connects to 2 edge switches. There are 2 core switches
+and each core switch is connected to 2 aggergation switches. This uses the
+'Diffserv using DSCP' REST APIs of haqos module in floodlight
+SDN controller to reserve bandwidth. Once the topology ic created, the user needs
+to run iperf on hosts to test the bandwidth reserved as follows:
+h1 iperf -s &
+h2 iperf -s &
+h3 iperf -s &
+h22 iperf -c 10.0.0.1 -t 100 &
+h23 iperf -c 10.0.0.2 -t 100 &
+h24 iperf -c 10.0.0.2 -t 100 &
+The flows can be dumped using ovs-ofctl command to check the bytes transferred and 
+one can compute the bandwidth got. Iperf clients at h22, h23 and h24 need to be run
+simultaneously to know that the bandwidth got is less than actually intended.
+
+
+
+6) test-haqos-inter.py
+This script creates a tree topology with 8 edge switches and each edge switch
+connected to 3 hosts for a total of 24 hosts. There are 4 aggregation switches
+and each aggergation switch connects to 2 edge switches. There are 2 core switches
+and each core switch is connected to 2 aggergation switches. This uses the
+'Aggregation of RSVP using DSCP' REST APIs of haqos module in floodlight
+SDN controller to reserve bandwidth. Once the topology ic created, the user needs
+to run iperf on hosts to test the bandwidth reserved as follows:
+h1 iperf -s &
+h2 iperf -s &
+h3 iperf -s &
+h22 iperf -c 10.0.0.1 -t 100 &
+h23 iperf -c 10.0.0.2 -t 100 &
+h24 iperf -c 10.0.0.2 -t 100 &
+The flows can be dumped using ovs-ofctl command to check the bytes transferred and 
+one can compute the bandwidth got. Iperf clients at h22, h23 and h4 need to be run
+simultaneously to know the bandwidth expecially when comparing with DSCP.
+
+
+
 This directory should hold configuration files for custom mininets.
 
 See custom_example.py, which loads the default minimal topology.  The advantage of defining a mininet in a separate file is that you then use the --custom option in mn to run the CLI or specific tests with it.
