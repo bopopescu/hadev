@@ -135,12 +135,12 @@ public class Haqos
     protected IRoutingService routingEngine;
     protected IRestApiService restApi;
 
-    protected ConcurrentHashMap<String /*PortName*/, String /*qosId*/ > qosMap;
+    protected Map<String /*PortName*/, String /*qosId*/ > qosMap;
 
-    protected ConcurrentHashMap<String /*PortName*/,
+    protected Map<String /*PortName*/,
               List<String> /*List of queueId*/ > queueMap;
 
-    protected ConcurrentHashMap<String /*PortName*/,
+    protected Map<String /*PortName*/,
               Long /*total port reservation*/ > portBandwidth;
     protected ConcurrentHashMap<String /*PortName*/,
               Long /*total port reservation*/ > portInterBandwidth;
@@ -186,7 +186,10 @@ public class Haqos
                 List<NodePortTuple> oldSwitches = route.getPath();
                 for (NodePortTuple nodes : oldSwitches) {
                     Long switchDpId = new Long(nodes.getNodeId());
-                    long currentBandwidth = portBandwidth.get(nodes.getPortId()).longValue();
+                    long currentBandwidth = 0;
+                    synchronized (portBandwidth) {
+                        currentBandwidth = portBandwidth.get(nodes.getPortId()).longValue();
+                    }
                     long updatedBandwidth = currentBandwidth -
                             bandwidthMap.get(routeId).longValue();
                     updateQueueOnPort(nodes, updatedBandwidth);
@@ -209,7 +212,11 @@ public class Haqos
                     Long switchDpId = new Long(nodes.getNodeId());
                     oldIdSet.add(switchDpId);
                     if (dpIdSet.contains(switchDpId) == false) {
-                        long currentBandwidth = portBandwidth.get(nodes.getPortId()).longValue();
+                        long currentBandwidth = 0;
+                        synchronized (portBandwidth) {
+                            currentBandwidth =
+                                portBandwidth.get(nodes.getPortId()).longValue();
+                        }
                         long updatedBandwidth = currentBandwidth -
                             bandwidthMap.get(routeId).longValue();
                         updateQueueOnPort(nodes, updatedBandwidth);
@@ -237,7 +244,9 @@ public class Haqos
                             routes.add(newRoute.getId());
                             portRouteMap.put(portName, routes);
                         }
-                        portBandwidth.put(portName, useBandwidth);
+                        synchronized (portBandwidth) {
+                            portBandwidth.put(portName, useBandwidth);
+                        }
                         //IOFSwitch sw = floodlightProvider.getSwitch(switchDpId);
                         //ImmutablePort port = sw.getPort(portId);
                         //String portName = port.getName();
@@ -341,52 +350,65 @@ public class Haqos
           "/home/snathan/floodlight-master/src/main/java/net/floodlightcontroller/haqos/CreateEfQueue.py",
           "--qName=" + queueName, "--srcPort=" + portName, "--qosName=" + qosName, "--qNum=" + portId,
           "--bandwidth=" + defaultDscpBandwidth};
-        portBandwidth.put(portName, defaultDscpBandwidth);
+        synchronized (portBandwidth) {
+            portBandwidth.put(portName, defaultDscpBandwidth);
+        }
         log.info (" created port for " + portName);
         callOvsUsingProcess(command, portName);
     }
 
     private void updateQueueOnPort (NodePortTuple node, long bandwidth) {
 
-        synchronized (node) {
             short portId = node.getPortId(); 
             String portName = portNameMap.get(node);
             String qosName;
-            if (qosMap.containsKey(portName)) {
-                qosName = qosMap.get(portName);
-                String[] command = {"python",
-                    "/home/snathan/floodlight-master/src/main/java/net/floodlightcontroller/haqos/DeleteQos.py",
-                    "--qosName=" + qosName, "--portName=" + portName};
+            log.info(" at update queue " + portName);
+            synchronized (qosMap) {
+                if (qosMap.containsKey(portName)) {
+                    qosName = qosMap.get(portName);
+                    log.info(" removing " + qosName + " " + portName);
+                    String[] command = {"python",
+                        "/home/snathan/floodlight-master/src/main/java/net/floodlightcontroller/haqos/DeleteQos.py",
+                        "--qosName=" + qosName, "--portName=" + portName};
 
-                deleteQosUsingProcess(command);
-                qosMap.remove(portName);
-            }
-            if (queueMap.containsKey(portName)) {
-                List<String> queueNames = queueMap.get(portName);
-                if (queueNames != null) {
-                    for (String queueName : queueNames) {
-
-                        String [] cmd = {"python",
-                          "/home/snathan/floodlight-master/src/main/java/net/floodlightcontroller/haqos/DeleteQueue.py",
-                          "--queueName=" + queueName};
-                        deleteQosUsingProcess(cmd);
-                    }
+                    deleteQosUsingProcess(command);
+                    qosMap.remove(portName);
                 }
-                queueMap.remove(portName);
-                portBandwidth.remove(portName);
+            }
+            synchronized (queueMap) {
+                if (queueMap.containsKey(portName)) {
+                    List<String> queueNames = queueMap.get(portName);
+                    if (queueNames != null) {
+                        for (String queueName : queueNames) {
+                            log.info(" removing " + queueName + " " + portName);
+
+                            String [] cmd = {"python",
+                              "/home/snathan/floodlight-master/src/main/java/net/floodlightcontroller/haqos/DeleteQueue.py",
+                              "--queueName=" + queueName};
+                            deleteQosUsingProcess(cmd);
+                        }
+                    }
+                    queueMap.remove(portName);
+                }
             }
 
             if (bandwidth > 0) {
                 qosName = "qos" + portId;
                 String queueName = "qu" + portId;
-                portBandwidth.put(portName, bandwidth);
+                synchronized (portBandwidth) {
+                    portBandwidth.put(portName, bandwidth);
+                }
+                log.info(" adding " + queueName + " " + portName + " bandwidth " + bandwidth);
                 String[] addCmd = {"python",
                       "/home/snathan/floodlight-master/src/main/java/net/floodlightcontroller/haqos/CreateQueues.py",
                       "--qName=" + queueName, "--srcPort=" + portName, "--qosName=" + qosName, "--qNum=" + portId,
                       "--bandwidth=" + bandwidth};
                 callOvsUsingProcess(addCmd, portName);
+            } else {
+                synchronized (portBandwidth) {
+                    portBandwidth.remove(portName);
+                }
             }
-        }
     }
 
 
@@ -468,15 +490,19 @@ public class Haqos
             sw = floodlightProvider.getSwitch(dpId);
             port = sw.getPort(portId);
             String portName = port.getName();
+            portNameMap.put (node, portName); 
             long speedInBps = port.getCurrentPortSpeed().getSpeedBps();
             if (speedInBps == 0) {
                 speedInBps = 100000000;
             }
-            if (portBandwidth.containsKey (portName) == false) {
-                createQueueOnPort (dpId, portId);
-                portBandwidth.put(portName, defaultDscpBandwidth);
+            long dscpBandwidth = defaultDscpBandwidth;
+            synchronized (portBandwidth) {
+                if (portBandwidth.containsKey (portName) == false) {
+                    createQueueOnPort (dpId, portId);
+                    portBandwidth.put(portName, defaultDscpBandwidth);
+                }
+                dscpBandwidth = portBandwidth.get(portName);
             }
-            long dscpBandwidth = portBandwidth.get(portName);
 
             long alreadyRsvd = 0;
             if (portInterBandwidth.containsKey(portName)) {
@@ -491,7 +517,9 @@ public class Haqos
                 }
                 log.info (" increasing resv for " + dpId + " port " + portId + " new bw " + (alreadyRsvd + bandwidth));
                 updateQueueOnPort (node, alreadyRsvd + bandwidth);
-                portBandwidth.put(portName, alreadyRsvd + bandwidth);
+                synchronized (portBandwidth) {
+                    portBandwidth.put(portName, alreadyRsvd + bandwidth);
+                }
             }
         }
         addFlowWithoutTunnel (switches, tpSrc, srcIp, 1); 
@@ -700,13 +728,17 @@ public class Haqos
                     continue;
                 }
                 if (i == 0) {
-                    qosMap.put(srcPort, line);
+                    synchronized (qosMap) {
+                        qosMap.put(srcPort, line);
+                    }
                 } else {
                     qidList.add(line);
                 }
                 i += 1;
             }
-            queueMap.put(srcPort, qidList);
+            synchronized (queueMap) {
+                queueMap.put(srcPort, qidList);
+            }
         } catch (IOException e) {
             log.info("io exception ");
         }
@@ -1021,7 +1053,9 @@ public class Haqos
                         routes.add(route.getId());
                         portRouteMap.put(portName, routes);
                     }
-                    portBandwidth.put(portName, useBandwidth);
+                    synchronized (portBandwidth) {
+                        portBandwidth.put(portName, useBandwidth);
+                    }
                     String qosName = "qos" + portId;
                     String queueName = "qu" + portId;
                     String[] command = {"python",
@@ -1084,14 +1118,14 @@ public class Haqos
         routingEngine = context.getServiceImpl(IRoutingService.class);
         restApi = context.getServiceImpl(IRestApiService.class);
 
-        qosMap = new ConcurrentHashMap<String, String> ();
-        queueMap = new ConcurrentHashMap<String, List<String>> ();
+        qosMap = Collections.synchronizedMap (new HashMap<String, String> ());
+        queueMap = Collections.synchronizedMap (new HashMap<String, List<String>> ());
         routeMap = new ConcurrentHashMap<RouteId, Route> ();
         sourcePortMap = new ConcurrentHashMap<RouteId, Short> ();
         destPortMap = new ConcurrentHashMap<RouteId, Short> ();
         bandwidthMap = new ConcurrentHashMap<RouteId, Long> ();
         portRouteMap = new ConcurrentHashMap<String, List<RouteId>> ();
-        portBandwidth = new ConcurrentHashMap<String, Long> ();
+        portBandwidth = Collections.synchronizedMap (new HashMap<String, Long> ());
         portInterBandwidth = new ConcurrentHashMap<String, Long> ();
         portNameMap = new ConcurrentHashMap<NodePortTuple, String> ();
         switchMap = new ConcurrentHashMap<Long, Boolean> ();
