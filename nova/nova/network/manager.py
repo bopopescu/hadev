@@ -583,7 +583,7 @@ class NetworkManager(manager.Manager):
         where network = dict containing pertinent data from a network db object
         and info = dict containing pertinent networking data
         """
-        use_slave = kwargs.get('use_slave') or False
+        use_subordinate = kwargs.get('use_subordinate') or False
 
         if not uuidutils.is_uuid_like(instance_id):
             instance_id = instance_uuid
@@ -591,7 +591,7 @@ class NetworkManager(manager.Manager):
         LOG.debug('Get instance network info', instance_uuid=instance_uuid)
 
         vifs = objects.VirtualInterfaceList.get_by_instance_uuid(
-                context, instance_uuid, use_slave=use_slave)
+                context, instance_uuid, use_subordinate=use_subordinate)
         networks = {}
 
         for vif in vifs:
